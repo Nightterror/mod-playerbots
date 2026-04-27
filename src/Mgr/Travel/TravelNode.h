@@ -698,8 +698,7 @@ public:
     TravelNode* GetNearestNodeOnMap(WorldPosition pos);
 
     bool GetFullPath(TravelPlan& plan, WorldPosition botPos,
-        uint32 botZoneId, uint32 teamId,
-        WorldPosition destination);
+        uint32 botZoneId, WorldPosition destination);
 
     // Resolve A* route between two world positions (returns node vector)
     std::vector<TravelNode*> ResolveRoute(WorldPosition startPos,

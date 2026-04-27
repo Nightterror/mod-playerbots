@@ -1247,7 +1247,7 @@ TravelNodeRoute TravelNodeMap::FindRouteNearestNodes(WorldPosition startPos, Wor
 
 bool TravelNodeMap::GetFullPath(TravelPlan& plan,
     WorldPosition botPos, uint32 botZoneId,
-    uint32 teamId, WorldPosition destination)
+    WorldPosition destination)
 {
     plan.Reset();
     plan.destination = destination;
