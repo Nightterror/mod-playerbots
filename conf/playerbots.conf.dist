@@ -580,6 +580,27 @@ AiPlayerbot.AutoGearQualityLimit = 3
 # Default: 0 (no limit)
 AiPlayerbot.AutoGearScoreLimit = 0
 
+# Autogear uses master's Individual Progression tier for quality/ilvl caps (requires mod-individual-progression)
+# Gear unlocks on end-boss clear per IP tier (see docs/playerbots-ip-autogear-implementation.md)
+# Default: 1 (enabled)
+AiPlayerbot.AutoGearFollowProgression = 1
+
+# If IP is unavailable, use AutoGearQualityLimit / AutoGearScoreLimit above
+# Default: 1 (enabled)
+AiPlayerbot.AutoGearFollowProgressionFallback = 1
+
+# Also cap at master's equipped gear score within the IP tier band
+# Default: 1 (enabled)
+AiPlayerbot.ProgressionGearPreferMasterGearscore = 1
+
+# Multiplier on master gear score when ProgressionGearPreferMasterGearscore is enabled
+# Default: 1.0
+AiPlayerbot.ProgressionGearMasterGearscoreRatio = 1.0
+
+# Sync group bot IP tier to master on autogear (replaces manual .ip setbot for gearing)
+# Default: 0 (disabled)
+AiPlayerbot.AutoGearSyncProgressionToGroup = 0
+
 # Enable/Disable cheats for bots
 # "food" (bots eat or drink without using food or drinks from their inventory)
 # "gold" (bots have infinite gold)

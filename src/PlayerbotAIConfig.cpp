@@ -599,6 +599,15 @@ bool PlayerbotAIConfig::Initialize()
     autoGearBisCommand = sConfigMgr->GetOption<int32>("AiPlayerbot.AutoGearBisCommand", 0);
     autoGearQualityLimit = sConfigMgr->GetOption<int32>("AiPlayerbot.AutoGearQualityLimit", 3);
     autoGearScoreLimit = sConfigMgr->GetOption<int32>("AiPlayerbot.AutoGearScoreLimit", 0);
+    autoGearFollowProgression = sConfigMgr->GetOption<bool>("AiPlayerbot.AutoGearFollowProgression", true);
+    autoGearFollowProgressionFallback =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.AutoGearFollowProgressionFallback", true);
+    progressionGearPreferMasterGearscore =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.ProgressionGearPreferMasterGearscore", true);
+    progressionGearMasterGearscoreRatio =
+        sConfigMgr->GetOption<float>("AiPlayerbot.ProgressionGearMasterGearscoreRatio", 1.0f);
+    autoGearSyncProgressionToGroup =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.AutoGearSyncProgressionToGroup", false);
 
     randomBotXPRate = sConfigMgr->GetOption<float>("AiPlayerbot.RandomBotXPRate", 1.0);
     randomBotAllianceRatio = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotAllianceRatio", 50);

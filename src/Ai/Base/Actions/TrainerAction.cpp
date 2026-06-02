@@ -5,13 +5,17 @@
 
 #include "TrainerAction.h"
 
+#include <sstream>
+
 #include "AiFactory.h"
 #include "BisListMgr.h"
 #include "BudgetValues.h"
 #include "Event.h"
+#include "PlayerbotAI.h"
 #include "PlayerbotFactory.h"
 #include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
+#include "ProgressionGearLimits.h"
 #include "ReputationMgr.h"
 #include "Trainer.h"
 
@@ -574,12 +578,35 @@ bool AutoGearAction::Execute(Event /*event*/)
         return false;
     }
 
-    botAI->TellMaster("I'm auto gearing");
-    uint32 gs = sPlayerbotAIConfig.autoGearScoreLimit == 0
-                    ? 0
-                    : PlayerbotFactory::CalcMixedGearScore(sPlayerbotAIConfig.autoGearScoreLimit,
-                                                           sPlayerbotAIConfig.autoGearQualityLimit);
-    PlayerbotFactory factory(bot, bot->GetLevel(), sPlayerbotAIConfig.autoGearQualityLimit, gs);
+    Player* master = botAI->GetMaster();
+    TrySyncProgressionToGroup(master);
+
+    ProgressionGearLimits limits = GetAutogearLimits(master, bot);
+
+    if (limits.fromProgression && master && sPlayerbotAIConfig.progressionGearPreferMasterGearscore)
+    {
+        uint32 masterGs = static_cast<uint32>(
+            PlayerbotAI::GetMixedGearScore(master, true, false, 12) *
+            sPlayerbotAIConfig.progressionGearMasterGearscoreRatio);
+
+        if (masterGs == 0)
+            masterGs = 1;
+
+        if (limits.gearScoreLimit == 0 || masterGs < limits.gearScoreLimit)
+            limits.gearScoreLimit = masterGs;
+    }
+
+    if (limits.fromProgression)
+    {
+        std::ostringstream out;
+        out << "I'm auto gearing (IP tier " << static_cast<uint32>(limits.ipTier) << ", ilvl cap "
+            << limits.maxIlvl << ")";
+        botAI->TellMaster(out);
+    }
+    else
+        botAI->TellMaster("I'm auto gearing");
+
+    PlayerbotFactory factory(bot, bot->GetLevel(), limits.quality, limits.gearScoreLimit);
     factory.InitEquipment(true);
     factory.InitAmmo();
     if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)

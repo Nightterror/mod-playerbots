@@ -428,6 +428,11 @@ public:
             altMaintenanceGemsEnchants;
     int32 autoGearCommand, autoGearCommandAltBots, autoGearQualityLimit, autoGearScoreLimit;
     int32 autoGearBisCommand;
+    bool autoGearFollowProgression;
+    bool autoGearFollowProgressionFallback;
+    bool progressionGearPreferMasterGearscore;
+    float progressionGearMasterGearscoreRatio;
+    bool autoGearSyncProgressionToGroup;
 
     uint32 useGroundMountAtMinLevel;
     uint32 useFastGroundMountAtMinLevel;
