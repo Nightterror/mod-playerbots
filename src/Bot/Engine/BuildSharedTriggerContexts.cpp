@@ -3,6 +3,7 @@
 #include "ChatTriggerContext.h"
 #include "WorldPacketTriggerContext.h"
 #include "Ai/Raid/Aq20/RaidAq20TriggerContext.h"
+#include "Ai/Raid/Aq40/RaidAq40TriggerContext.h"
 #include "Ai/Raid/MoltenCore/RaidMcTriggerContext.h"
 #include "Ai/Raid/BlackwingLair/RaidBwlTriggerContext.h"
 #include "Ai/Raid/Karazhan/RaidKarazhanTriggerContext.h"
@@ -14,11 +15,14 @@
 #include "Ai/Raid/HyjalSummit/RaidHyjalSummitTriggerContext.h"
 #include "Ai/Raid/BlackTemple/RaidBlackTempleTriggerContext.h"
 #include "Ai/Raid/ZulAman/RaidZulAmanTriggerContext.h"
+#include "Ai/Raid/SunwellPlateau/RaidSunwellTriggerContext.h"
 #include "Ai/Raid/ObsidianSanctum/RaidOsTriggerContext.h"
 #include "Ai/Raid/EyeOfEternity/RaidEoETriggerContext.h"
 #include "Ai/Raid/VaultOfArchavon/RaidVoATriggerContext.h"
 #include "Ai/Raid/Ulduar/RaidUlduarTriggerContext.h"
 #include "Ai/Raid/Onyxia/RaidOnyxiaTriggerContext.h"
+#include "Ai/Raid/TrialOfTheCrusader/RaidTocTriggerContext.h"
+#include "Ai/Raid/RubySanctum/RaidRubySanctumTriggerContext.h"
 #include "Ai/Raid/ICC/ICCTriggerContext.h"
 #include "Ai/Dungeon/TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
@@ -29,6 +33,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new ChatTriggerContext());
     triggerContexts.Add(new WorldPacketTriggerContext());
     triggerContexts.Add(new RaidAq20TriggerContext());
+    triggerContexts.Add(new RaidAq40TriggerContext());
     triggerContexts.Add(new RaidMcTriggerContext());
     triggerContexts.Add(new RaidBwlTriggerContext());
     triggerContexts.Add(new RaidKarazhanTriggerContext());
@@ -40,11 +45,14 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidHyjalSummitTriggerContext());
     triggerContexts.Add(new RaidBlackTempleTriggerContext());
     triggerContexts.Add(new RaidZulAmanTriggerContext());
+    triggerContexts.Add(new RaidSunwellTriggerContext());
     triggerContexts.Add(new RaidOsTriggerContext());
     triggerContexts.Add(new RaidEoETriggerContext());
     triggerContexts.Add(new RaidVoATriggerContext());
     triggerContexts.Add(new RaidUlduarTriggerContext());
     triggerContexts.Add(new RaidOnyxiaTriggerContext());
+    triggerContexts.Add(new RaidTocTriggerContext());
+    triggerContexts.Add(new RaidRubySanctumTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
     triggerContexts.Add(new TbcDungeonAuchenaiCryptsTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());

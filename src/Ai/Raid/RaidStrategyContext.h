@@ -3,6 +3,7 @@
 
 #include "Strategy.h"
 #include "RaidAq20Strategy.h"
+#include "RaidAq40Strategy.h"
 #include "RaidMcStrategy.h"
 #include "RaidBwlStrategy.h"
 #include "RaidKarazhanStrategy.h"
@@ -14,11 +15,14 @@
 #include "RaidHyjalSummitStrategy.h"
 #include "RaidBlackTempleStrategy.h"
 #include "RaidZulAmanStrategy.h"
+#include "RaidSunwellStrategy.h"
 #include "RaidOsStrategy.h"
 #include "RaidEoEStrategy.h"
 #include "RaidVoAStrategy.h"
 #include "RaidUlduarStrategy.h"
 #include "RaidOnyxiaStrategy.h"
+#include "RaidTocStrategy.h"
+#include "RaidRubySanctumStrategy.h"
 #include "ICCStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
@@ -27,6 +31,7 @@ public:
     RaidStrategyContext() : NamedObjectContext<Strategy>(false, true)
     {
         creators["aq20"] = &RaidStrategyContext::aq20;
+        creators["aq40"] = &RaidStrategyContext::aq40;
         creators["moltencore"] = &RaidStrategyContext::moltencore;
         creators["bwl"] = &RaidStrategyContext::bwl;
         creators["karazhan"] = &RaidStrategyContext::karazhan;
@@ -38,16 +43,20 @@ public:
         creators["hyjal"] = &RaidStrategyContext::hyjal;
         creators["blacktemple"] = &RaidStrategyContext::blacktemple;
         creators["zulaman"] = &RaidStrategyContext::zulaman;
+        creators["sunwell"] = &RaidStrategyContext::sunwell;
         creators["wotlk-os"] = &RaidStrategyContext::wotlk_os;
         creators["wotlk-eoe"] = &RaidStrategyContext::wotlk_eoe;
         creators["voa"] = &RaidStrategyContext::voa;
         creators["ulduar"] = &RaidStrategyContext::ulduar;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
+        creators["toc"] = &RaidStrategyContext::toc;
+        creators["wotlk-rs"] = &RaidStrategyContext::wotlk_rs;
         creators["icc"] = &RaidStrategyContext::icc;
     }
 
 private:
     static Strategy* aq20(PlayerbotAI* botAI) { return new RaidAq20Strategy(botAI); }
+    static Strategy* aq40(PlayerbotAI* botAI) { return new RaidAq40Strategy(botAI); }
     static Strategy* moltencore(PlayerbotAI* botAI) { return new RaidMcStrategy(botAI); }
     static Strategy* bwl(PlayerbotAI* botAI) { return new RaidBwlStrategy(botAI); }
     static Strategy* karazhan(PlayerbotAI* botAI) { return new RaidKarazhanStrategy(botAI); }
@@ -59,10 +68,13 @@ private:
     static Strategy* hyjal(PlayerbotAI* botAI) { return new RaidHyjalSummitStrategy(botAI); }
     static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBlackTempleStrategy(botAI); }
     static Strategy* zulaman(PlayerbotAI* botAI) { return new RaidZulAmanStrategy(botAI); }
+    static Strategy* sunwell(PlayerbotAI* botAI) { return new RaidSunwellStrategy(botAI); }
     static Strategy* wotlk_os(PlayerbotAI* botAI) { return new RaidOsStrategy(botAI); }
     static Strategy* wotlk_eoe(PlayerbotAI* botAI) { return new RaidEoEStrategy(botAI); }
     static Strategy* voa(PlayerbotAI* botAI) { return new RaidVoAStrategy(botAI); }
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
+    static Strategy* toc(PlayerbotAI* botAI) { return new RaidTocStrategy(botAI); }
+    static Strategy* wotlk_rs(PlayerbotAI* botAI) { return new RaidRubySanctumStrategy(botAI); }
     static Strategy* ulduar(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
 };

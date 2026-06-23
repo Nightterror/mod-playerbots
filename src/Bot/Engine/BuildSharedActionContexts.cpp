@@ -3,6 +3,7 @@
 #include "ChatActionContext.h"
 #include "WorldPacketActionContext.h"
 #include "Ai/Raid/Aq20/RaidAq20ActionContext.h"
+#include "Ai/Raid/Aq40/RaidAq40ActionContext.h"
 #include "Ai/Raid/MoltenCore/RaidMcActionContext.h"
 #include "Ai/Raid/BlackwingLair/RaidBwlActionContext.h"
 #include "Ai/Raid/Karazhan/RaidKarazhanActionContext.h"
@@ -14,11 +15,14 @@
 #include "Ai/Raid/HyjalSummit/RaidHyjalSummitActionContext.h"
 #include "Ai/Raid/BlackTemple/RaidBlackTempleActionContext.h"
 #include "Ai/Raid/ZulAman/RaidZulAmanActionContext.h"
+#include "Ai/Raid/SunwellPlateau/RaidSunwellActionContext.h"
 #include "Ai/Raid/ObsidianSanctum/RaidOsActionContext.h"
 #include "Ai/Raid/EyeOfEternity/RaidEoEActionContext.h"
 #include "Ai/Raid/VaultOfArchavon/RaidVoAActionContext.h"
 #include "Ai/Raid/Ulduar/RaidUlduarActionContext.h"
 #include "Ai/Raid/Onyxia/RaidOnyxiaActionContext.h"
+#include "Ai/Raid/TrialOfTheCrusader/RaidTocActionContext.h"
+#include "Ai/Raid/RubySanctum/RaidRubySanctumActionContext.h"
 #include "Ai/Raid/ICC/ICCActionContext.h"
 #include "Ai/Dungeon/TbcDungeonActionContext.h"
 #include "Ai/Dungeon/WotlkDungeonActionContext.h"
@@ -29,6 +33,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new ChatActionContext());
     actionContexts.Add(new WorldPacketActionContext());
     actionContexts.Add(new RaidAq20ActionContext());
+    actionContexts.Add(new RaidAq40ActionContext());
     actionContexts.Add(new RaidMcActionContext());
     actionContexts.Add(new RaidBwlActionContext());
     actionContexts.Add(new RaidKarazhanActionContext());
@@ -39,12 +44,15 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidHyjalSummitActionContext());
     actionContexts.Add(new RaidBlackTempleActionContext());
     actionContexts.Add(new RaidZulAmanActionContext());
+    actionContexts.Add(new RaidSunwellActionContext());
     actionContexts.Add(new RaidNaxxActionContext());
     actionContexts.Add(new RaidOsActionContext());
     actionContexts.Add(new RaidEoEActionContext());
     actionContexts.Add(new RaidVoAActionContext());
     actionContexts.Add(new RaidUlduarActionContext());
     actionContexts.Add(new RaidOnyxiaActionContext());
+    actionContexts.Add(new RaidTocActionContext());
+    actionContexts.Add(new RaidRubySanctumActionContext());
     actionContexts.Add(new RaidIccActionContext());
     actionContexts.Add(new TbcDungeonAuchenaiCryptsActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
