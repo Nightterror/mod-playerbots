@@ -601,6 +601,18 @@ AiPlayerbot.ProgressionGearMasterGearscoreRatio = 1.0
 # Default: 0 (disabled)
 AiPlayerbot.AutoGearSyncProgressionToGroup = 0
 
+# Cap maintenance consumables/reagents/ammo by master's IP tier (requires mod-individual-progression)
+# Default: 1 (enabled)
+AiPlayerbot.MaintenanceFollowProgression = 1
+
+# If IP is unavailable, use LimitGearExpansion + level only for maintenance
+# Default: 1 (enabled)
+AiPlayerbot.MaintenanceFollowProgressionFallback = 1
+
+# Remove over-tier consumables from bags during maintenance
+# Default: 0 (disabled)
+AiPlayerbot.MaintenanceCleanupOverTierConsumables = 0
+
 # Enable/Disable cheats for bots
 # "food" (bots eat or drink without using food or drinks from their inventory)
 # "gold" (bots have infinite gold)
@@ -651,6 +663,9 @@ AiPlayerbot.BotCheats = "food,taxi,raid"
 #
 # Black Temple
 # - 10985, A Distraction for Akama
+#
+# With mod-individual-progression, maintenance only completes attunements at or
+# below the character's IP tier: Kara/CoT chain at 8+, SSC/TK at 9+, Hyjal/BT at 10+.
 #
 AiPlayerbot.AttunementQuests = 10279,10277,10282,10283,10284,10285,10296,10297,10298,11481,11482,11488,11490,11492,10901,10888,10445,10985
 

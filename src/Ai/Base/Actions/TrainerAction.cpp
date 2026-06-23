@@ -184,8 +184,22 @@ bool MaintenanceAction::Execute(Event /*event*/)
         return false;
     }
 
-    botAI->TellMaster("I'm maintaining");
-    PlayerbotFactory factory(bot, bot->GetLevel());
+    Player* master = botAI->GetMaster();
+    TrySyncProgressionToGroup(master);
+
+    ProgressionGearLimits limits = GetMaintenanceLimits(master, bot);
+
+    if (limits.fromProgression)
+    {
+        std::ostringstream out;
+        out << "I'm maintaining (IP tier " << static_cast<uint32>(limits.ipTier) << ", "
+            << GetContentPhaseLabel(limits.maxContentPhase) << " supplies)";
+        botAI->TellMaster(out);
+    }
+    else
+        botAI->TellMaster("I'm maintaining");
+
+    PlayerbotFactory factory(bot, bot->GetLevel(), limits);
 
     if (!botAI->IsAlt())
     {
@@ -272,6 +286,10 @@ bool MaintenanceAction::Execute(Event /*event*/)
     }
 
     bot->DurabilityRepairAll(false, 1.0f, false);
+
+    if (sPlayerbotAIConfig.maintenanceCleanupOverTierConsumables && limits.fromProgression)
+        factory.CleanupOverTierSupplies();
+
     bot->SendTalentsInfoData(false);
 
     return true;
@@ -606,7 +624,7 @@ bool AutoGearAction::Execute(Event /*event*/)
     else
         botAI->TellMaster("I'm auto gearing");
 
-    PlayerbotFactory factory(bot, bot->GetLevel(), limits.quality, limits.gearScoreLimit);
+    PlayerbotFactory factory(bot, bot->GetLevel(), limits, limits.quality, limits.gearScoreLimit);
     factory.InitEquipment(true);
     factory.InitAmmo();
     if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)

@@ -608,6 +608,11 @@ bool PlayerbotAIConfig::Initialize()
         sConfigMgr->GetOption<float>("AiPlayerbot.ProgressionGearMasterGearscoreRatio", 1.0f);
     autoGearSyncProgressionToGroup =
         sConfigMgr->GetOption<bool>("AiPlayerbot.AutoGearSyncProgressionToGroup", false);
+    maintenanceFollowProgression = sConfigMgr->GetOption<bool>("AiPlayerbot.MaintenanceFollowProgression", true);
+    maintenanceFollowProgressionFallback =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.MaintenanceFollowProgressionFallback", true);
+    maintenanceCleanupOverTierConsumables =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.MaintenanceCleanupOverTierConsumables", false);
 
     randomBotXPRate = sConfigMgr->GetOption<float>("AiPlayerbot.RandomBotXPRate", 1.0);
     randomBotAllianceRatio = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotAllianceRatio", 50);

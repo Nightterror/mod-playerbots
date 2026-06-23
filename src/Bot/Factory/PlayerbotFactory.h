@@ -12,6 +12,7 @@
 #include "InventoryAction.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
+#include "ProgressionGearLimits.h"
 
 class Item;
 
@@ -52,6 +53,11 @@ class PlayerbotFactory
 {
 public:
     PlayerbotFactory(Player* bot, uint32 level, uint32 itemQuality = 0, uint32 gearScoreLimit = 0);
+    PlayerbotFactory(Player* bot, uint32 level, ProgressionGearLimits const& progressionLimits,
+                     uint32 itemQuality = 0, uint32 gearScoreLimit = 0);
+
+    void SetProgressionLimits(ProgressionGearLimits const& limits);
+    ProgressionGearLimits const& GetProgressionLimits() const { return progressionLimits_; }
 
     static ObjectGuid GetRandomBot();
     static void Init();
@@ -75,6 +81,7 @@ public:
     static uint32 CalcMixedGearScore(uint32 gs, uint32 quality);
     void InitPetTalents();
     void CleanupConsumables();
+    void CleanupOverTierSupplies();
     void InitReagents();
     void InitConsumables();
     void InitPotions();
@@ -213,11 +220,16 @@ private:
     void IterateItemsInBags(IterateItemsVisitor* visitor);
     void IterateItemsInEquip(IterateItemsVisitor* visitor);
     void IterateItemsInBank(IterateItemsVisitor* visitor);
+    bool TryAddAllowedConsumable(std::vector<uint32> const& itemIds, uint32 count,
+                                 std::vector<std::pair<uint32, uint32>>& items, bool checkLevel75 = true);
+    bool AllowProgressionItem(ItemTemplate const* proto) const;
+    bool AllowProgressionAmmo(uint32 itemId) const;
     EnchantContainer::const_iterator GetEnchantContainerBegin() { return m_EnchantContainer.begin(); }
     EnchantContainer::const_iterator GetEnchantContainerEnd() { return m_EnchantContainer.end(); }
     uint32 level;
     uint32 itemQuality;
     uint32 gearScoreLimit;
+    ProgressionGearLimits progressionLimits_;
     static std::list<uint32> specialQuestIds;
     static std::unordered_map<uint32, std::vector<uint32>> trainerIdCache;
     static std::vector<uint32> enchantSpellIdCache;

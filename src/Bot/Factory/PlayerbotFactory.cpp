@@ -28,6 +28,7 @@
 #include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotRepository.h"
+#include "ProgressionGearLimits.h"
 #include "PlayerbotGuildMgr.h"
 #include "Playerbots.h"
 #include "QuestDef.h"
@@ -332,6 +333,62 @@ PlayerbotFactory::PlayerbotFactory(Player* bot, uint32 level, uint32 itemQuality
         this->itemQuality = sPlayerbotAIConfig.randomGearQualityLimit;
         this->gearScoreLimit = gs;
     }
+}
+
+PlayerbotFactory::PlayerbotFactory(Player* bot, uint32 level, ProgressionGearLimits const& progressionLimits,
+                                   uint32 itemQuality, uint32 gearScoreLimit)
+    : level(level), itemQuality(itemQuality), gearScoreLimit(gearScoreLimit), progressionLimits_(progressionLimits),
+      bot(bot)
+{
+    botAI = GET_PLAYERBOT_AI(bot);
+    if (!this->itemQuality)
+    {
+        uint32 gs = sPlayerbotAIConfig.randomGearScoreLimit == 0
+                        ? 0
+                        : PlayerbotFactory::CalcMixedGearScore(sPlayerbotAIConfig.randomGearScoreLimit,
+                                                               sPlayerbotAIConfig.randomGearQualityLimit);
+        this->itemQuality = sPlayerbotAIConfig.randomGearQualityLimit;
+        this->gearScoreLimit = gs;
+    }
+}
+
+void PlayerbotFactory::SetProgressionLimits(ProgressionGearLimits const& limits)
+{
+    progressionLimits_ = limits;
+}
+
+bool PlayerbotFactory::AllowProgressionItem(ItemTemplate const* proto) const
+{
+    return IsItemAllowedForProgression(proto, progressionLimits_);
+}
+
+bool PlayerbotFactory::AllowProgressionAmmo(uint32 itemId) const
+{
+    if (!progressionLimits_.fromProgression)
+        return true;
+
+    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+    return IsItemAllowedForProgression(proto, progressionLimits_);
+}
+
+bool PlayerbotFactory::TryAddAllowedConsumable(std::vector<uint32> const& itemIds, uint32 count,
+                                               std::vector<std::pair<uint32, uint32>>& items, bool checkLevel75)
+{
+    for (uint32 itemId : itemIds)
+    {
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+        if (!proto)
+            continue;
+        if (proto->RequiredLevel > level)
+            continue;
+        if (checkLevel75 && level > 75)
+            continue;
+        if (!AllowProgressionItem(proto))
+            continue;
+        items.push_back({ itemId, count });
+        return true;
+    }
+    return false;
 }
 
 void PlayerbotFactory::Init()
@@ -856,200 +913,89 @@ void PlayerbotFactory::InitConsumables()
     switch (bot->getClass())
     {
         case CLASS_PRIEST:
-        {
             if (specTab == PRIEST_TAB_SHADOW)
             {
-                std::vector<uint32> wizard_oils = {
-                    BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL };
-                for (uint32 itemId : wizard_oils)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 2});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL }, 2,
+                    items);
             }
             else
             {
-                std::vector<uint32> mana_oils = {
-                    BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL };
-                for (uint32 itemId : mana_oils)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 2});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL }, 2, items);
             }
             break;
-        }
         case CLASS_MAGE:
-        {
-            std::vector<uint32> wizard_oils = {
-                BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL };
-            for (uint32 itemId : wizard_oils)
-            {
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                if (proto->RequiredLevel > level || level > 75)
-                    continue;
-                items.push_back({itemId, 2});
-                break;
-            }
+            TryAddAllowedConsumable(
+                { BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL }, 2, items);
             break;
-        }
         case CLASS_DRUID:
-        {
             if (specTab == DRUID_TAB_BALANCE)
             {
-                std::vector<uint32> wizard_oils = {
-                    BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL };
-                for (uint32 itemId : wizard_oils)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 2});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL }, 2,
+                    items);
             }
             else if (specTab == DRUID_TAB_FERAL)
             {
-                std::vector<uint32> sharpening_stones = {
-                    ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
-                    HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE };
-                std::vector<uint32> weightstones = {
-                    ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE,
-                    HEAVY_WEIGHTSTONE, COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE };
-                for (uint32 itemId : sharpening_stones)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 20});
-                    break;
-                }
-                for (uint32 itemId : weightstones)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 20});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, ELEMENTAL_SHARPENING_STONE,
+                      DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
+                      HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE },
+                    20, items);
+                TryAddAllowedConsumable(
+                    { ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE, HEAVY_WEIGHTSTONE,
+                      COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE },
+                    20, items);
             }
             else
             {
-                std::vector<uint32> mana_oils = {
-                    BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL };
-                for (uint32 itemId : mana_oils)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 2});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL }, 2, items);
             }
             break;
-        }
         case CLASS_PALADIN:
-        {
             if (specTab == PALADIN_TAB_HOLY)
             {
-                std::vector<uint32> mana_oils = {
-                    BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL };
-                for (uint32 itemId : mana_oils)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 2});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL }, 2, items);
             }
             else
             {
-                std::vector<uint32> sharpening_stones = {
-                    ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
-                    HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE };
-                std::vector<uint32> weightstones = {
-                    ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE,
-                    HEAVY_WEIGHTSTONE, COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE };
-                for (uint32 itemId : sharpening_stones)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 20});
-                    break;
-                }
-                for (uint32 itemId : weightstones)
-                {
-                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                    if (proto->RequiredLevel > level || level > 75)
-                        continue;
-                    items.push_back({itemId, 20});
-                    break;
-                }
+                TryAddAllowedConsumable(
+                    { ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, ELEMENTAL_SHARPENING_STONE,
+                      DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
+                      HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE },
+                    20, items);
+                TryAddAllowedConsumable(
+                    { ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE, HEAVY_WEIGHTSTONE,
+                      COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE },
+                    20, items);
             }
             break;
-        }
         case CLASS_WARRIOR:
         case CLASS_HUNTER:
         case CLASS_DEATH_KNIGHT:
-        {
-            std::vector<uint32> sharpening_stones = {
-                ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
-                HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE };
-            std::vector<uint32> weightstones = {
-                ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE,
-                HEAVY_WEIGHTSTONE, COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE };
-            for (uint32 itemId : sharpening_stones)
-            {
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                if (proto->RequiredLevel > level || level > 75)
-                    continue;
-                items.push_back({itemId, 20});
-                break;
-            }
-            for (uint32 itemId : weightstones)
-            {
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                if (proto->RequiredLevel > level || level > 75)
-                    continue;
-                items.push_back({itemId, 20});
-                break;
-            }
+            TryAddAllowedConsumable(
+                { ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, ELEMENTAL_SHARPENING_STONE,
+                  DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
+                  HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE },
+                20, items);
+            TryAddAllowedConsumable(
+                { ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE, HEAVY_WEIGHTSTONE,
+                  COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE },
+                20, items);
             break;
-        }
         case CLASS_ROGUE:
-        {
-            std::vector<uint32> instant_poisons = {
-                INSTANT_POISON_IX, INSTANT_POISON_VIII, INSTANT_POISON_VII, INSTANT_POISON_VI, INSTANT_POISON_V,
-                INSTANT_POISON_IV, INSTANT_POISON_III, INSTANT_POISON_II, INSTANT_POISON };
-            std::vector<uint32> deadly_poisons = {
-                DEADLY_POISON_IX, DEADLY_POISON_VIII, DEADLY_POISON_VII, DEADLY_POISON_VI, DEADLY_POISON_V,
-                DEADLY_POISON_IV, DEADLY_POISON_III, DEADLY_POISON_II, DEADLY_POISON };
-            for (uint32 itemId : deadly_poisons)
-            {
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                if (proto->RequiredLevel > level)
-                    continue;
-                items.push_back({itemId, 20});
-                break;
-            }
-            for (uint32 itemId : instant_poisons)
-            {
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
-                if (proto->RequiredLevel > level)
-                    continue;
-                items.push_back({itemId, 20});
-                break;
-            }
+            TryAddAllowedConsumable(
+                { DEADLY_POISON_IX, DEADLY_POISON_VIII, DEADLY_POISON_VII, DEADLY_POISON_VI, DEADLY_POISON_V,
+                  DEADLY_POISON_IV, DEADLY_POISON_III, DEADLY_POISON_II, DEADLY_POISON },
+                20, items, false);
+            TryAddAllowedConsumable(
+                { INSTANT_POISON_IX, INSTANT_POISON_VIII, INSTANT_POISON_VII, INSTANT_POISON_VI, INSTANT_POISON_V,
+                  INSTANT_POISON_IV, INSTANT_POISON_III, INSTANT_POISON_II, INSTANT_POISON },
+                20, items, false);
             break;
-        }
         default:
             break;
     }
@@ -3572,11 +3518,19 @@ void PlayerbotFactory::InitAmmo()
             continue;
 
         // disable next expansion ammo
-        if (sPlayerbotAIConfig.limitGearExpansion && bot->GetLevel() <= 60 && tEntry >= 23728)
-            continue;
+        if (progressionLimits_.fromProgression)
+        {
+            if (!AllowProgressionAmmo(tEntry))
+                continue;
+        }
+        else
+        {
+            if (sPlayerbotAIConfig.limitGearExpansion && bot->GetLevel() <= 60 && tEntry >= 23728)
+                continue;
 
-        if (sPlayerbotAIConfig.limitGearExpansion && bot->GetLevel() <= 70 && tEntry >= 35570)
-            continue;
+            if (sPlayerbotAIConfig.limitGearExpansion && bot->GetLevel() <= 70 && tEntry >= 35570)
+                continue;
+        }
 
         entry = tEntry;
         break;
@@ -3758,7 +3712,20 @@ void PlayerbotFactory::InitPotions()
         if (!visitor.GetResult().empty())
             continue;
 
-        uint32 itemId = sRandomItemMgr.GetRandomPotion(level, effect);
+        uint32 itemId = 0;
+        for (uint32 attempt = 0; attempt < 15; ++attempt)
+        {
+            itemId = sRandomItemMgr.GetRandomPotion(level, effect);
+            if (!itemId)
+                break;
+
+            ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+            if (proto && AllowProgressionItem(proto))
+                break;
+
+            itemId = 0;
+        }
+
         if (!itemId)
         {
             // LOG_INFO("playerbots", "No potions (type {}) available for bot {} ({} level)", effect,
@@ -3852,6 +3819,9 @@ void PlayerbotFactory::InitFood()
         if (proto->Area || proto->Map || proto->RequiredCityRank || proto->RequiredHonorRank)
             continue;
 
+        if (!AllowProgressionItem(proto))
+            continue;
+
         items[proto->Spells[0].SpellCategory].push_back(itemId);
     }
 
@@ -3869,6 +3839,8 @@ void PlayerbotFactory::InitFood()
 
             uint32 itemId = ids[index];
             ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+            if (!proto || !AllowProgressionItem(proto))
+                continue;
             // beer / wine ...
             if (proto->Spells[0].SpellId == 11007 || proto->Spells[0].SpellId == 11008 ||
                 proto->Spells[0].SpellId == 11009 || proto->Spells[0].SpellId == 11629 ||
@@ -4003,6 +3975,10 @@ void PlayerbotFactory::InitReagents()
     }
     for (std::pair item : items)
     {
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item.first);
+        if (!proto || !AllowProgressionItem(proto))
+            continue;
+
         int count = (int)item.second - (int)bot->GetItemCount(item.first);
         if (count > 0)
             StoreItem(item.first, count);
@@ -4049,8 +4025,8 @@ void PlayerbotFactory::CleanupConsumables() // remove old consumables as part of
     std::set<uint32> idsToDelete = {
         BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL, LESSER_MANA_OIL, MINOR_MANA_OIL,
         BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL, WIZARD_OIL, LESSER_WIZARD_OIL, MINOR_WIZARD_OIL,
-        ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, DENSE_SHARPENING_STONE, SOLID_SHARPENING_STONE,
-        HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE,
+        ADAMANTITE_SHARPENING_STONE, FEL_SHARPENING_STONE, ELEMENTAL_SHARPENING_STONE, DENSE_SHARPENING_STONE,
+        SOLID_SHARPENING_STONE, HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE, ROUGH_SHARPENING_STONE,
         ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE,
         HEAVY_WEIGHTSTONE, COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE,
         INSTANT_POISON_IX, INSTANT_POISON_VIII, INSTANT_POISON_VII, INSTANT_POISON_VI, INSTANT_POISON_V,
@@ -4070,6 +4046,38 @@ void PlayerbotFactory::CleanupConsumables() // remove old consumables as part of
 
     for (Item* item : itemsToDelete)
         bot->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
+}
+
+void PlayerbotFactory::CleanupOverTierSupplies()
+{
+    if (!progressionLimits_.fromProgression)
+        return;
+
+    std::vector<Item*> items;
+    for (uint32 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+        if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+            items.push_back(item);
+
+    for (uint32 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+        if (Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+            for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                if (Item* item = bag->GetItemByPos(j))
+                    items.push_back(item);
+
+    for (Item* item : items)
+    {
+        ItemTemplate const* proto = item->GetTemplate();
+        if (!proto)
+            continue;
+
+        if (proto->Class == ITEM_CLASS_PROJECTILE && !AllowProgressionAmmo(proto->ItemId))
+            bot->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
+        else if (AllowProgressionItem(proto))
+            continue;
+        else if (proto->Class == ITEM_CLASS_CONSUMABLE || proto->Class == ITEM_CLASS_REAGENT ||
+                 (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_REAGENT))
+            bot->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
+    }
 }
 
 void PlayerbotFactory::InitGlyphs(bool increment)
@@ -4901,7 +4909,11 @@ void PlayerbotFactory::ApplyEnchantAndGemsNew(bool /*destroyOld*/)
         if (!gemProperties)
             continue;
 
-        if (sPlayerbotAIConfig.limitEnchantExpansion && bot->GetLevel() <= 70 && enchantGem >= 39900)
+        if (!progressionLimits_.fromProgression &&
+            sPlayerbotAIConfig.limitEnchantExpansion && bot->GetLevel() <= 70 && enchantGem >= 39900)
+            continue;
+
+        if (!IsGemAllowedForProgression(gemTemplate, progressionLimits_, bot->GetLevel()))
             continue;
 
         uint32 requiredLevel = gemTemplate->ItemLevel;
@@ -4959,12 +4971,18 @@ void PlayerbotFactory::ApplyEnchantAndGemsNew(bool /*destroyOld*/)
             if (requiredLevel > bot->GetLevel())
                 continue;
 
-            // disable next expansion enchantments
-            if (sPlayerbotAIConfig.limitEnchantExpansion && bot->GetLevel() <= 60 && enchantSpell >= 27899)
+            if (!IsEnchantSpellAllowedForProgression(enchantSpell, progressionLimits_))
                 continue;
 
-            if (sPlayerbotAIConfig.limitEnchantExpansion && bot->GetLevel() <= 70 && enchantSpell >= 44483)
-                continue;
+            if (!progressionLimits_.fromProgression)
+            {
+                // disable next expansion enchantments
+                if (sPlayerbotAIConfig.limitEnchantExpansion && bot->GetLevel() <= 60 && enchantSpell >= 27899)
+                    continue;
+
+                if (sPlayerbotAIConfig.limitEnchantExpansion && bot->GetLevel() <= 70 && enchantSpell >= 44483)
+                    continue;
+            }
 
             for (uint8 j = 0; j < MAX_SPELL_EFFECTS; ++j)
             {
@@ -5355,6 +5373,9 @@ void PlayerbotFactory::InitAttunementQuests()
         // Check each quest status before adding to the completion list
         for (uint32 questId : sPlayerbotAIConfig.attunementQuests)
         {
+            if (!IsAttunementQuestAllowedForPlayer(questId, bot))
+                continue;
+
             QuestStatus questStatus = bot->GetQuestStatus(questId);
 
             if (questStatus == QUEST_STATUS_NONE) // Quest not yet taken/completed

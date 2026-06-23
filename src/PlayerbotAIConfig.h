@@ -433,6 +433,9 @@ public:
     bool progressionGearPreferMasterGearscore;
     float progressionGearMasterGearscoreRatio;
     bool autoGearSyncProgressionToGroup;
+    bool maintenanceFollowProgression;
+    bool maintenanceFollowProgressionFallback;
+    bool maintenanceCleanupOverTierConsumables;
 
     uint32 useGroundMountAtMinLevel;
     uint32 useFastGroundMountAtMinLevel;
