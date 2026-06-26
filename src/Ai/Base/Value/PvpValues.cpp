@@ -83,14 +83,24 @@ std::vector<CreatureData const*> BgMastersValue::Calculate()
     BattlegroundTypeId bgTypeId = (BattlegroundTypeId)stoi(qualifier);
 
     std::vector<uint32> entries;
-    std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> battleMastersCache =
+    std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> const& battleMastersCache =
         sRandomPlayerbotMgr.getBattleMastersCache();
-    entries.insert(entries.end(), battleMastersCache[TEAM_NEUTRAL][bgTypeId].begin(),
-                   battleMastersCache[TEAM_NEUTRAL][bgTypeId].end());
-    entries.insert(entries.end(), battleMastersCache[TEAM_ALLIANCE][bgTypeId].begin(),
-                   battleMastersCache[TEAM_ALLIANCE][bgTypeId].end());
-    entries.insert(entries.end(), battleMastersCache[TEAM_HORDE][bgTypeId].begin(),
-                   battleMastersCache[TEAM_HORDE][bgTypeId].end());
+    auto appendTeam = [&](TeamId teamId)
+    {
+        auto teamIt = battleMastersCache.find(teamId);
+        if (teamIt == battleMastersCache.end())
+            return;
+
+        auto bgIt = teamIt->second.find(bgTypeId);
+        if (bgIt == teamIt->second.end())
+            return;
+
+        entries.insert(entries.end(), bgIt->second.begin(), bgIt->second.end());
+    };
+
+    appendTeam(TEAM_NEUTRAL);
+    appendTeam(TEAM_ALLIANCE);
+    appendTeam(TEAM_HORDE);
 
     std::vector<CreatureData const*> bmGuids;
 
@@ -198,16 +208,28 @@ BattlegroundTypeId RpgBgTypeValue::Calculate()
             if (bot->InBattlegroundQueueForBattlegroundQueueType(queueTypeId))
                 continue;
 
-            std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> battleMastersCache =
+            std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> const& battleMastersCache =
                 sRandomPlayerbotMgr.getBattleMastersCache();
 
-            for (auto& entry : battleMastersCache[TEAM_NEUTRAL][bgTypeId])
-                if (entry == guidPosition.GetEntry())
-                    return bgTypeId;
+            auto matchesEntry = [&](TeamId teamId) -> bool
+            {
+                auto teamIt = battleMastersCache.find(teamId);
+                if (teamIt == battleMastersCache.end())
+                    return false;
 
-            for (auto& entry : battleMastersCache[bot->GetTeamId()][bgTypeId])
-                if (entry == guidPosition.GetEntry())
-                    return bgTypeId;
+                auto bgIt = teamIt->second.find(bgTypeId);
+                if (bgIt == teamIt->second.end())
+                    return false;
+
+                for (uint32 entry : bgIt->second)
+                    if (entry == guidPosition.GetEntry())
+                        return true;
+
+                return false;
+            };
+
+            if (matchesEntry(TEAM_NEUTRAL) || matchesEntry(bot->GetTeamId()))
+                return bgTypeId;
         }
 
     return BATTLEGROUND_TYPE_NONE;

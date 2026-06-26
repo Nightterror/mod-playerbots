@@ -14,6 +14,7 @@
 #include "DBCEnums.h"
 
 class Player;
+class ArenaTeam;
 class WorldSession;
 
 enum ArenaType : uint8;
@@ -51,12 +52,34 @@ public:
 
     Player* CreateRandomBot(WorldSession* session, uint8 cls, std::unordered_map<NameRaceAndGender, std::vector<std::string>>& names);
     static void CreateRandomBots();
-    static void CreateRandomArenaTeams(ArenaType slot, uint32 count);
+    static void CreateRandomArenaTeams(ArenaType slot, uint32 count, uint8 forcedLevel = 0);
+    static void EnsureRandomArenaTeams();
+    static bool CanCreateRandomBotArenaTeams();
+    static bool HasRequiredRandomBotArenaTeams();
+    static bool IsRandomBotArenaTeamCreationExhausted(ArenaType type, uint8 forcedLevel);
+    static void MarkRandomBotArenaTeamCreationExhausted(ArenaType type, uint8 forcedLevel, uint32 created,
+                                                        uint32 target);
+    static void ClearRandomBotArenaTeamCreationExhausted();
+    static void RemoveRandomBotArenaTeam(ArenaTeam* team);
+    static uint32 GetRandomBotArenaTeamTargetCount(ArenaType type, uint8 forcedLevel);
+    static uint32 CountRandomBotArenaTeams(ArenaType type, uint8 forcedLevel);
+    static void PrepareBotArenaLevel(Player* player, uint8 targetLevel);
+    static void RepinRandomBotArenaCaptains();
+    static uint8 GetRandomBotArenaTeamBracketLevel(ArenaTeam* team);
+    static uint8 GetRandomBotArenaBracketLevel(Player* bot);
+    static bool IsRandomBotArenaLevel70FeaturesEnabled();
+    static bool ShouldLockRandomBotArenaLevel(uint8 bracket);
+    static bool ShouldPinRandomBotArenaFillers(uint8 bracket);
+    static void ApplyRandomBotArenaLevelPolicy(Player* bot, uint8 bracket);
+    static void RefreshRandomBotArenaLevelPolicy(Player* bot);
+    static void RepinRandomBotArenaTeamForQueue(ArenaTeam* team);
     static std::string const CreateRandomGuildName();
     static uint32 CalculateTotalAccountCount();
     static uint32 CalculateAvailableCharsPerAccount();
 
 private:
+    static uint32 ArenaTeamCreationKey(ArenaType type, uint8 forcedLevel);
+    static bool IsRandomBotArenaBracketSatisfied(ArenaType type, uint8 forcedLevel, uint32 targetCount);
     static bool IsValidRaceClassCombination(uint8 race, uint8 class_, uint32 expansion);
     std::string const CreateRandomBotName(NameRaceAndGender raceAndGender);
     static std::string const CreateRandomArenaTeamName();

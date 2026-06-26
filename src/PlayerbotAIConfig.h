@@ -229,6 +229,8 @@ public:
     // --
 
     bool randomBotJoinBG;
+    bool randomBotPvpSpecOnQueueJoin;
+    bool randomBotPvpGearOnQueueJoin;
     bool randomBotAutoJoinBG;
 
     std::string randomBotAutoJoinICBrackets;
@@ -243,7 +245,7 @@ public:
     uint32 randomBotAutoJoinBGABCount;
     uint32 randomBotAutoJoinBGWSCount;
 
-    uint32 randomBotAutoJoinArenaBracket;
+    std::string randomBotAutoJoinArenaBrackets;
 
     uint32 randomBotAutoJoinBGRatedArena2v2Count;
     uint32 randomBotAutoJoinBGRatedArena3v3Count;
@@ -386,8 +388,13 @@ public:
     uint32 randomBotArenaTeam2v2Count;
     uint32 randomBotArenaTeam3v3Count;
     uint32 randomBotArenaTeam5v5Count;
+    uint32 randomBotArenaTeam5v5Count70;
+    uint32 randomBotArenaTeam5v5Count80;
     bool deleteRandomBotArenaTeams;
+    bool randomBotArenaLevel70Features;
     std::vector<uint32> randomBotArenaTeams;
+    std::unordered_map<uint32, uint8> randomBotArenaTeamLevels;
+    std::set<uint32> randomBotArenaTeamCreationExhausted;
 
     uint32 selfBotLevel;
     bool downgradeMaxLevelBot;

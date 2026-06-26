@@ -47,6 +47,19 @@ TierGearEntry const kTierGearTable[] = {
 
 constexpr uint8 kMaxProgressionTier = 18;
 
+// Rated arena season -> max PvP item ilvl (Gladiator vendor bands)
+uint32 const kArenaSeasonMaxIlvl[] = {
+    0,    // unused
+    123,  // S1 (TBC)
+    128,  // S2
+    136,  // S3 Merciless
+    146,  // S4 Vengeful
+    213,  // S5 Deadly
+    232,  // S6 Furious
+    251,  // S7 Relentless
+    264,  // S8 Wrathful
+};
+
 constexpr uint32 TBC_CONTENT_ITEM_FLOOR = 23528;
 constexpr uint32 WOTLK_CONTENT_ITEM_FLOOR = 33470;
 constexpr uint32 WOTLK_GEM_ITEM_FLOOR = 39900;
@@ -240,6 +253,20 @@ void ApplyConfCeiling(ProgressionGearLimits& limits)
         limits.gearScoreLimit = confCap;
 }
 
+void ApplyRandomBotConfCeiling(ProgressionGearLimits& limits)
+{
+    if (sPlayerbotAIConfig.randomGearScoreLimit <= 0)
+        return;
+
+    uint32 quality = sPlayerbotAIConfig.randomGearQualityLimit >= 0
+                         ? static_cast<uint32>(sPlayerbotAIConfig.randomGearQualityLimit)
+                         : limits.quality;
+    uint32 confCap = CalcGearScoreLimit(static_cast<uint32>(sPlayerbotAIConfig.randomGearScoreLimit), quality);
+
+    if (limits.gearScoreLimit == 0 || confCap < limits.gearScoreLimit)
+        limits.gearScoreLimit = confCap;
+}
+
 #ifdef PLAYERBOTS_HAS_INDIVIDUAL_PROGRESSION
 ProgressionGearLimits GetProgressionLimitsFromMaster(Player* master)
 {
@@ -341,6 +368,79 @@ bool IsEnchantSpellAllowedForProgression(uint32 enchantSpellId, ProgressionGearL
         return false;
 
     return true;
+}
+
+ProgressionGearLimits GetProgressionLimitsForTier(uint8 tier)
+{
+    ProgressionGearLimits limits;
+    FillProgressionLimitsFromTier(tier, limits);
+    return limits;
+}
+
+ProgressionGearLimits GetRandomBotConfLimits()
+{
+    ProgressionGearLimits limits;
+    limits.quality = sPlayerbotAIConfig.randomGearQualityLimit >= 0
+                         ? static_cast<uint32>(sPlayerbotAIConfig.randomGearQualityLimit)
+                         : ITEM_QUALITY_EPIC;
+    if (sPlayerbotAIConfig.randomGearScoreLimit > 0)
+    {
+        limits.maxIlvl = static_cast<uint32>(sPlayerbotAIConfig.randomGearScoreLimit);
+        limits.gearScoreLimit = CalcGearScoreLimit(limits.maxIlvl, limits.quality);
+    }
+    return limits;
+}
+
+ProgressionGearLimits GetRandomBotProgressionGearLimits()
+{
+    if (!sPlayerbotAIConfig.autoGearFollowProgression)
+        return GetRandomBotConfLimits();
+
+#ifdef PLAYERBOTS_HAS_INDIVIDUAL_PROGRESSION
+    if (!IndividualProgressionApi::IsEnabled())
+        return GetRandomBotConfLimits();
+
+    uint8 serverTier = IndividualProgressionApi::GetServerProgressionTier();
+    if (!serverTier)
+        return GetRandomBotConfLimits();
+
+    ProgressionGearLimits limits = GetProgressionLimitsForTier(serverTier);
+    ApplyRandomBotConfCeiling(limits);
+    return limits;
+#else
+    return GetRandomBotConfLimits();
+#endif
+}
+
+ProgressionGearLimits GetRandomBotPvPGearLimits()
+{
+#ifdef PLAYERBOTS_HAS_INDIVIDUAL_PROGRESSION
+    if (IndividualProgressionApi::IsEnabled())
+    {
+        uint8 serverTier = IndividualProgressionApi::GetServerProgressionTier();
+        uint8 arenaSeason = IndividualProgressionApi::GetServerArenaSeason();
+
+        if (arenaSeason >= 1 && arenaSeason <= 8)
+        {
+            ProgressionGearLimits limits;
+            if (serverTier)
+                FillProgressionLimitsFromTier(serverTier, limits);
+            else
+            {
+                limits.quality = ITEM_QUALITY_EPIC;
+                limits.maxContentPhase = CONTENT_PHASE_WOTLK;
+            }
+
+            limits.maxIlvl = kArenaSeasonMaxIlvl[arenaSeason];
+            limits.quality = ITEM_QUALITY_EPIC;
+            limits.gearScoreLimit = CalcGearScoreLimit(limits.maxIlvl, limits.quality);
+            limits.fromProgression = true;
+            return limits;
+        }
+    }
+#endif
+
+    return GetRandomBotProgressionGearLimits();
 }
 
 ProgressionGearLimits GetAutogearLimits(Player* master, Player* /*bot*/)

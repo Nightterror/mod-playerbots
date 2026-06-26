@@ -339,9 +339,11 @@ bool PlayerbotAIConfig::Initialize()
     ////////////////////////// !CHAT
 
     randomBotJoinBG = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotJoinBG", true);
+    randomBotPvpSpecOnQueueJoin = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotPvpSpecOnQueueJoin", true);
+    randomBotPvpGearOnQueueJoin = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotPvpGearOnQueueJoin", true);
     randomBotAutoJoinBG = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotAutoJoinBG", false);
 
-    randomBotAutoJoinArenaBracket = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotAutoJoinArenaBracket", 7);
+    randomBotAutoJoinArenaBrackets = sConfigMgr->GetOption<std::string>("AiPlayerbot.RandomBotAutoJoinArenaBrackets", "14");
 
     randomBotAutoJoinICBrackets = sConfigMgr->GetOption<std::string>("AiPlayerbot.RandomBotAutoJoinICBrackets", "0,1");
     randomBotAutoJoinEYBrackets = sConfigMgr->GetOption<std::string>("AiPlayerbot.RandomBotAutoJoinEYBrackets", "0,1,2");
@@ -685,7 +687,10 @@ bool PlayerbotAIConfig::Initialize()
     randomBotArenaTeam2v2Count = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeam2v2Count", 10);
     randomBotArenaTeam3v3Count = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeam3v3Count", 10);
     randomBotArenaTeam5v5Count = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeam5v5Count", 5);
+    randomBotArenaTeam5v5Count70 = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeam5v5Count70", 0);
+    randomBotArenaTeam5v5Count80 = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeam5v5Count80", 0);
     deleteRandomBotArenaTeams = sConfigMgr->GetOption<bool>("AiPlayerbot.DeleteRandomBotArenaTeams", false);
+    randomBotArenaLevel70Features = sConfigMgr->GetOption<bool>("AiPlayerbot.RandomBotArenaLevel70Features", true);
     randomBotArenaTeamMaxRating = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeamMaxRating", 2000);
     randomBotArenaTeamMinRating = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotArenaTeamMinRating", 1000);
 

@@ -13,6 +13,32 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 #include "PositionValue.h"
+#include "RandomPlayerbotPvPSwap.h"
+#include "RandomPlayerbotFactory.h"
+#include "RandomPlayerbotMgr.h"
+#include "World.h"
+
+#include <sstream>
+
+namespace
+{
+    bool IsConfiguredArenaBracket(BattlegroundBracketId bracketId)
+    {
+        std::stringstream ss(sPlayerbotAIConfig.randomBotAutoJoinArenaBrackets);
+        std::string item;
+
+        while (std::getline(ss, item, ','))
+        {
+            if (item.empty())
+                continue;
+
+            if (static_cast<uint32>(std::stoi(item)) == static_cast<uint32>(bracketId))
+                return true;
+        }
+
+        return false;
+    }
+}
 
 bool BGJoinAction::Execute(Event /*event*/)
 {
@@ -42,7 +68,12 @@ bool BGJoinAction::Execute(Event /*event*/)
                 isRated = true;
 
             if (isRated && !gatherArenaTeam(type))
+            {
+                ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamByCaptain(bot->GetGUID(), type);
+                if (!arenateam || !sRandomPlayerbotMgr.IsArenaTeamMusterPending(arenateam->GetId()))
+                    sRandomPlayerbotMgr.RevertRatedArenaBotJoinReservation(queueTypeId, pvpDiff->GetBracketId(), bot);
                 return false;
+            }
 
             botAI->GetAiObjectContext()->GetValue<uint32>("arena type")->Set(isRated);
         }
@@ -66,56 +97,63 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
     if (arenateam->GetMembersSize() < ((uint32)arenateam->GetType()))
         return false;
 
+    if (!sRandomPlayerbotMgr.EnsureArenaTeamMustered(arenateam))
+        return false;
+
+    RandomPlayerbotFactory::RepinRandomBotArenaTeamForQueue(arenateam);
+
+    bool directArenaQueue = sRandomPlayerbotMgr.IsRandomBot(bot);
+
+    if (!directArenaQueue &&
+        sRandomPlayerbotMgr.GetBattleMasterGUID(bot, BATTLEGROUND_AA).IsEmpty())
+    {
+        if (bot->IsBeingTeleported())
+            return false;
+
+        LOG_INFO("playerbots", "Team #{} <{}>: No battlemaster available for arena queue", arenateam->GetId(),
+                 arenateam->GetName().c_str());
+        return false;
+    }
+
     GuidVector members;
 
-    // search for arena team members and make them online
     for (ArenaTeam::MemberList::iterator itr = arenateam->GetMembers().begin(); itr != arenateam->GetMembers().end();
          ++itr)
     {
-        bool offline = false;
         Player* member = ObjectAccessor::FindConnectedPlayer(itr->Guid);
         if (!member)
-        {
-            offline = true;
-        }
-        // if (!member && !sObjectMgr->GetPlayerAccountIdByGUID(itr->guid))
-        //     continue;
+            continue;
 
-        if (offline)
-            sRandomPlayerbotMgr.AddPlayerBot(itr->Guid, 0);
+        PlayerbotAI* memberBotAI = GET_PLAYERBOT_AI(member);
+        if (!memberBotAI)
+            continue;
 
-        if (member)
-        {
-            PlayerbotAI* memberBotAI = GET_PLAYERBOT_AI(member);
-            if (!memberBotAI)
-                continue;
+        if (member->GetGroup() && memberBotAI->HasRealPlayerMaster())
+            continue;
 
-            if (member->GetGroup() && memberBotAI->HasRealPlayerMaster())
-                continue;
+        if (!sPlayerbotAIConfig.IsInRandomAccountList(member->GetSession()->GetAccountId()))
+            continue;
 
-            if (!sPlayerbotAIConfig.IsInRandomAccountList(member->GetSession()->GetAccountId()))
-                continue;
+        if (member->IsInCombat())
+            continue;
 
-            if (member->IsInCombat())
-                continue;
+        if (member->GetGUID() == bot->GetGUID())
+            continue;
 
-            if (member->GetGUID() == bot->GetGUID())
-                continue;
+        if (member->InBattleground())
+            continue;
 
-            if (member->InBattleground())
-                continue;
+        if (member->InBattlegroundQueue())
+            continue;
 
-            if (member->InBattlegroundQueue())
-                continue;
+        if (member->GetLevel() != bot->GetLevel())
+            continue;
 
-            if (member->GetGroup())
-                member->GetGroup()->RemoveMember(member->GetGUID());
+        if (member->GetGroup())
+            member->GetGroup()->RemoveMember(member->GetGUID());
 
-            memberBotAI->Reset();
-        }
-
-        if (member)
-            members.push_back(member->GetGUID());
+        memberBotAI->Reset();
+        members.push_back(member->GetGUID());
     }
 
     if (!members.size() || (int)members.size() < (int)(arenateam->GetType() - 1))
@@ -158,7 +196,10 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
         if (!member)
             continue;
 
-        if (member->GetLevel() < 70)
+        if (!sWorld->IsArenaTeamAllowedLevel(member->GetLevel()))
+            continue;
+
+        if (member->GetLevel() != bot->GetLevel())
             continue;
 
         if (!group->AddMember(member))
@@ -171,6 +212,8 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
         memberBotAI->Reset();
         member->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED | AURA_INTERRUPT_FLAG_CHANGE_MAP);
         member->TeleportTo(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 0);
+
+        RandomPlayerbotPvPSwap::EnterPvPMode(member);
 
         LOG_INFO("playerbots", "Bot {} <{}>: Member of <{}>", member->GetGUID().ToString().c_str(),
                  member->GetName().c_str(), arenateam->GetName().c_str());
@@ -186,6 +229,13 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
     {
         LOG_INFO("playerbots", "Team #{} <{}> Group is not ready for match (not enough members)", arenateam->GetId(),
                  arenateam->GetName().c_str());
+
+        for (ObjectGuid const& memberGuid : members)
+        {
+            if (Player* member = ObjectAccessor::FindConnectedPlayer(memberGuid))
+                RandomPlayerbotPvPSwap::LeavePvPMode(member);
+        }
+
         group->Disband();
     }
 
@@ -217,6 +267,16 @@ bool BGJoinAction::canJoinBg(BattlegroundQueueTypeId queueTypeId, BattlegroundBr
     if (bracket_temp != bracketId)
         return false;
 
+    ArenaType arenaType = ArenaType(BattlegroundMgr::BGArenaType(queueTypeId));
+    if (arenaType != ARENA_TYPE_NONE)
+    {
+        if (!sWorld->IsArenaTeamAllowedLevel(bot->GetLevel()))
+            return false;
+
+        if (!IsConfiguredArenaBracket(bracketId))
+            return false;
+    }
+
     return true;
 }
 
@@ -242,6 +302,9 @@ bool BGJoinAction::shouldJoinBg(BattlegroundQueueTypeId queueTypeId, Battlegroun
         BracketSize = (uint32)(type * 2);
         TeamSize = (uint32)type;
 
+        if (!sWorld->IsArenaTeamAllowedLevel(bot->GetLevel()))
+            return false;
+
         // Check if bots should join Rated Arena (Only captains can queue)
         uint32 ratedArenaBotCount = sRandomPlayerbotMgr.BattlegroundData[queueTypeId][bracketId].ratedArenaBotCount;
         uint32 ratedArenaPlayerCount =
@@ -258,7 +321,9 @@ bool BGJoinAction::shouldJoinBg(BattlegroundQueueTypeId queueTypeId, Battlegroun
         {
             if (sArenaTeamMgr->GetArenaTeamByCaptain(bot->GetGUID(), type))
             {
-                sRandomPlayerbotMgr.BattlegroundData[queueTypeId][bracketId].ratedArenaBotCount += TeamSize;
+                if (!sRandomPlayerbotMgr.IsRatedArenaBotCaptainSelected(bot, queueTypeId, bracketId))
+                    return false;
+
                 ratedList.push_back(queueTypeId);
                 return true;
             }
@@ -429,21 +494,24 @@ bool BGJoinAction::JoinQueue(uint32 type)
     if (arenaType != ARENA_TYPE_NONE)
         isArena = true;
 
-    // get battlemaster
-    // Unit* unit = botAI->GetUnit(AI_VALUE2(CreatureData const*, "bg master", bgTypeId));
-    Unit* unit = botAI->GetUnit(sRandomPlayerbotMgr.GetBattleMasterGUID(bot, bgTypeId));
-    if (!unit && isArena)
+    bool joinAsGroup = bot->GetGroup() && bot->GetGroup()->GetLeaderGUID() == bot->GetGUID();
+    bool directRandomBotArena = isArena && joinAsGroup && sRandomPlayerbotMgr.IsRandomBot(bot);
+
+    Unit* unit = nullptr;
+    if (!directRandomBotArena)
     {
-        botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
-        LOG_DEBUG("playerbots", "Bot {} could not find Battlemaster to join", bot->GetGUID().ToString().c_str());
-        return false;
+        unit = botAI->GetUnit(sRandomPlayerbotMgr.GetBattleMasterGUID(bot, bgTypeId));
+        if (!unit && isArena)
+        {
+            botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
+            LOG_DEBUG("playerbots", "Bot {} could not find Battlemaster to join", bot->GetGUID().ToString().c_str());
+            return false;
+        }
     }
 
     // This breaks groups as refresh includes a remove from group function call.
     // refresh food/regs
     // sRandomPlayerbotMgr.Refresh(bot);
-
-    bool joinAsGroup = bot->GetGroup() && bot->GetGroup()->GetLeaderGUID() == bot->GetGUID();
 
     // in wotlk only arena requires battlemaster guid
     // ObjectGuid guid = isArena ? unit->GetGUID() : bot->GetGUID(); //not used, line marked for removal.
@@ -479,6 +547,9 @@ bool BGJoinAction::JoinQueue(uint32 type)
     {
         isArena = true;
         isRated = botAI->GetAiObjectContext()->GetValue<uint32>("arena type")->Get();
+
+        if (!sWorld->IsArenaTeamAllowedLevel(bot->GetLevel()))
+            return false;
 
         if (joinAsGroup)
             asGroup = true;
@@ -534,6 +605,18 @@ bool BGJoinAction::JoinQueue(uint32 type)
 
     botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
 
+    RandomPlayerbotPvPSwap::EnterPvPMode(bot);
+
+    if (isArena && joinAsGroup && sRandomPlayerbotMgr.IsRandomBot(bot))
+    {
+        if (sRandomPlayerbotMgr.JoinArenaAsGroup(bot, arenaslot, isRated, uint8(arenaType)))
+            return true;
+
+        LOG_WARN("playerbots", "Bot {} <{}>: direct arena queue failed",
+                 bot->GetGUID().ToString(), bot->GetName());
+        return false;
+    }
+
     WorldPacket* packet = nullptr;
     if (!isArena)
     {
@@ -573,6 +656,9 @@ bool FreeBGJoinAction::shouldJoinBg(BattlegroundQueueTypeId queueTypeId, Battleg
         BracketSize = (uint32)(type * 2);
         TeamSize = (uint32)type;
 
+        if (!sWorld->IsArenaTeamAllowedLevel(bot->GetLevel()))
+            return false;
+
         // Check if bots should join Rated Arena (Only captains can queue)
         uint32 ratedArenaBotCount = sRandomPlayerbotMgr.BattlegroundData[queueTypeId][bracketId].ratedArenaBotCount;
         uint32 ratedArenaPlayerCount =
@@ -589,7 +675,9 @@ bool FreeBGJoinAction::shouldJoinBg(BattlegroundQueueTypeId queueTypeId, Battleg
         {
             if (sArenaTeamMgr->GetArenaTeamByCaptain(bot->GetGUID(), type))
             {
-                sRandomPlayerbotMgr.BattlegroundData[queueTypeId][bracketId].ratedArenaBotCount += TeamSize;
+                if (!sRandomPlayerbotMgr.IsRatedArenaBotCaptainSelected(bot, queueTypeId, bracketId))
+                    return false;
+
                 ratedList.push_back(queueTypeId);
                 return true;
             }
@@ -685,6 +773,8 @@ bool BGLeaveAction::Execute(Event /*event*/)
     botAI->GetAiObjectContext()->GetValue<uint32>("bg role")->Set(0);
     botAI->GetAiObjectContext()->GetValue<uint32>("arena type")->Set(0);
 
+    RandomPlayerbotPvPSwap::LeavePvPMode(bot);
+
     return true;
 }
 
@@ -733,6 +823,9 @@ bool BGStatusAction::LeaveBG(PlayerbotAI* botAI)
     PositionInfo pos = botAI->GetAiObjectContext()->GetValue<PositionMap&>("position")->Get()["bg objective"];
     pos.Reset();
     posMap["bg objective"] = pos;
+
+    RandomPlayerbotPvPSwap::LeavePvPMode(bot);
+
     return true;
 }
 
@@ -965,6 +1058,8 @@ bool BGStatusAction::Execute(Event event)
             botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
             botAI->GetAiObjectContext()->GetValue<uint32>("bg role")->Set(0);
             botAI->GetAiObjectContext()->GetValue<uint32>("arena type")->Set(0);
+
+            RandomPlayerbotPvPSwap::LeavePvPMode(bot);
 
             return true;
         }

@@ -36,7 +36,10 @@ bool IsItemAllowedForProgression(ItemTemplate const* proto, ProgressionGearLimit
 bool IsGemAllowedForProgression(ItemTemplate const* gem, ProgressionGearLimits const& limits, uint32 botLevel);
 bool IsEnchantSpellAllowedForProgression(uint32 enchantSpellId, ProgressionGearLimits const& limits);
 
+ProgressionGearLimits GetProgressionLimitsForTier(uint8 ipTier);
 ProgressionGearLimits GetAutogearLimits(Player* master, Player* bot);
+ProgressionGearLimits GetRandomBotProgressionGearLimits();
+ProgressionGearLimits GetRandomBotPvPGearLimits();
 ProgressionGearLimits GetMaintenanceLimits(Player* master, Player* bot);
 void TrySyncProgressionToGroup(Player* master);
 

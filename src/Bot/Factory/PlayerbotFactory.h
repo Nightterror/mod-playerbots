@@ -14,6 +14,7 @@
 #include "PlayerbotAI.h"
 #include "ProgressionGearLimits.h"
 
+class ArenaTeam;
 class Item;
 
 struct ItemTemplate;
@@ -56,13 +57,23 @@ public:
     PlayerbotFactory(Player* bot, uint32 level, ProgressionGearLimits const& progressionLimits,
                      uint32 itemQuality = 0, uint32 gearScoreLimit = 0);
 
+    static PlayerbotFactory CreateForRandomBot(Player* bot, uint32 level);
+    static bool TryJoinRandomBotArenaTeam(Player* bot, ArenaTeam* arenateam);
+    static bool IsRandomBotEligibleForArenaFill(Player* bot, uint8 bracketLevel);
+    static bool IsRandomBotGuidEligibleForArenaFill(ObjectGuid guid, uint8 bracketLevel);
+    static uint32 CountEligibleRandomBotArenaFillers(TeamId faction, uint8 bracketLevel);
+    static uint32 CountEligibleRandomBotArenaFillersIncludingOffline(TeamId faction, uint8 bracketLevel);
+    static bool FillRandomBotArenaTeam(ArenaTeam* team);
+    static bool TryJoinRandomBotArenaTeamOffline(ObjectGuid guid, ArenaTeam* arenateam);
+
     void SetProgressionLimits(ProgressionGearLimits const& limits);
+    void SetForcePvpGear(bool force) { forcePvpGear_ = force; }
     ProgressionGearLimits const& GetProgressionLimits() const { return progressionLimits_; }
 
     static ObjectGuid GetRandomBot();
     static void Init();
     void Refresh();
-    void Randomize(bool incremental);
+    void Randomize(bool incremental, bool skipArenaTeamInit = false);
     static std::list<uint32> classQuestIds;
     void ClearEverything();
     void InitSkills();
@@ -230,6 +241,7 @@ private:
     uint32 itemQuality;
     uint32 gearScoreLimit;
     ProgressionGearLimits progressionLimits_;
+    bool forcePvpGear_ = false;
     static std::list<uint32> specialQuestIds;
     static std::unordered_map<uint32, std::vector<uint32>> trainerIdCache;
     static std::vector<uint32> enchantSpellIdCache;

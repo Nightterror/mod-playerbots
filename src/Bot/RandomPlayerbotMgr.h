@@ -43,6 +43,8 @@ struct BattlegroundInfo
     uint32 bgAlliancePlayerCount = 0;
 };
 
+class ArenaTeam;
+
 class ChatHandler;
 class PerfMonitorOperation;
 class WorldLocation;
@@ -143,8 +145,11 @@ public:
     bool IsSpecPvp(uint32 bot, uint8 cls);
     void Remove(Player* bot);
     ObjectGuid GetBattleMasterGUID(Player* bot, BattlegroundTypeId bgTypeId);
+    bool JoinArenaAsGroup(Player* leader, uint8 arenaSlot, bool isRated, uint8 arenaType);
     CreatureData const* GetCreatureDataByEntry(uint32 entry);
     void LoadBattleMastersCache();
+    void CollectBattleMasterEntriesForBg(TeamId team, BattlegroundTypeId bgTypeId,
+                                         std::vector<uint32>& entries) const;
     std::map<uint32, std::map<uint32, BattlegroundInfo>> BattlegroundData;
     std::map<uint32, std::map<uint32, std::map<TeamId, uint32>>> VisualBots;
     std::map<uint32, std::map<uint32, std::map<uint32, uint32>>> Supporters;
@@ -152,9 +157,18 @@ public:
     void CheckBgQueue();
     void CheckLfgQueue();
     void CheckPlayers();
+    void EnsureRandomBotArenaTeams();
+    bool AreRandomBotArenaTeamsEnsured() const { return randomBotArenaTeamsEnsured; }
+    bool EnsureArenaTeamMustered(ArenaTeam* team);
+    bool IsArenaTeamMusterPending(uint32 teamId) const;
+    void CancelArenaTeamMuster(uint32 teamId);
     void LogBattlegroundInfo();
+    bool IsRatedArenaBotCaptainSelected(Player* bot, BattlegroundQueueTypeId queueTypeId,
+                                        BattlegroundBracketId bracketId);
+    void RevertRatedArenaBotJoinReservation(BattlegroundQueueTypeId queueTypeId,
+                                            BattlegroundBracketId bracketId, Player* bot);
 
-    std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> getBattleMastersCache()
+    std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> const& getBattleMastersCache() const
     {
         return BattleMastersCache;
     }
@@ -229,6 +243,33 @@ private:
     time_t BgCheckTimer;
     time_t LfgCheckTimer;
     time_t PlayersCheckTimer;
+    bool randomBotArenaTeamsEnsured = false;  // set when all rndbot arena rosters are full
+    struct PendingArenaTeamMuster
+    {
+        time_t startedAt = 0;
+    };
+    static constexpr uint32 ARENA_MUSTER_TIMEOUT_SEC = 45;
+    std::unordered_map<uint32, PendingArenaTeamMuster> pendingArenaTeamMusters_;
+    struct RatedArenaBotQueueSlot
+    {
+        ObjectGuid selectedCaptainGuid;
+        time_t selectedAt = 0;
+        uint32 excludedOpponentTeamId = 0;
+    };
+    std::map<uint32, std::map<uint32, RatedArenaBotQueueSlot>> ratedArenaBotQueueSelection_;
+    void EnsureRatedArenaBotCaptainSelected(BattlegroundQueueTypeId queueTypeId,
+                                            BattlegroundBracketId bracketId);
+    void ClearRatedArenaBotCaptainSelection(BattlegroundQueueTypeId queueTypeId,
+                                            BattlegroundBracketId bracketId);
+    uint32 GetPlayerRatedArenaPreviousOpponentTeamId(BattlegroundQueueTypeId queueTypeId,
+                                                     BattlegroundBracketId bracketId) const;
+    std::vector<ObjectGuid> CollectEligibleRatedArenaBotCaptains(BattlegroundQueueTypeId queueTypeId,
+                                                                 BattlegroundBracketId bracketId,
+                                                                 uint32 excludeArenaTeamId);
+    static uint8 GetArenaSlotForType(ArenaType type);
+    static bool IsConfiguredArenaBracket(BattlegroundBracketId bracketId);
+    void LoginBotForArenaMuster(ObjectGuid guid);
+    static bool IsArenaTeamMemberReady(ObjectGuid guid);
     time_t RealPlayerLastTimeSeen = 0;
     time_t DelayLoginBotsTimer;
     time_t printStatsTimer;

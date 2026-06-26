@@ -5,16 +5,132 @@
 
 #include "RandomPlayerbotFactory.h"
 
+#include <algorithm>
+
 #include "AccountMgr.h"
+#include "ArenaTeam.h"
 #include "ArenaTeamMgr.h"
+#include "CharacterCache.h"
 #include "DatabaseEnv.h"
+#include "Player.h"
+#include "PlayerbotFactory.h"
 #include "PlayerbotAI.h"
+#include "RandomPlayerbotMgr.h"
 #include "RaceMgr.h"
 #include "ScriptMgr.h"
 #include "SharedDefines.h"
 #include "SocialMgr.h"
 #include "Timer.h"
+#include "World.h"
 #include "Log.h"
+
+namespace
+{
+uint8 GetArenaTeamCaptainLevel(ArenaTeam const* team)
+{
+    if (!team)
+        return 0;
+
+    ObjectGuid captainGuid = team->GetCaptain();
+    if (Player* captain = ObjectAccessor::FindPlayer(captainGuid))
+        return captain->GetLevel();
+
+    if (CharacterCacheEntry const* entry = sCharacterCache->GetCharacterCacheByGuid(captainGuid))
+        return entry->Level;
+
+    return 0;
+}
+
+void TrackRandomBotArenaTeam(uint32 teamId, uint8 bracketLevel = 0)
+{
+    if (std::find(sPlayerbotAIConfig.randomBotArenaTeams.begin(), sPlayerbotAIConfig.randomBotArenaTeams.end(),
+                  teamId) == sPlayerbotAIConfig.randomBotArenaTeams.end())
+        sPlayerbotAIConfig.randomBotArenaTeams.push_back(teamId);
+
+    if (bracketLevel && sWorld->IsArenaTeamAllowedLevel(bracketLevel))
+        sPlayerbotAIConfig.randomBotArenaTeamLevels[teamId] = bracketLevel;
+}
+
+void UntrackRandomBotArenaTeam(uint32 teamId)
+{
+    auto& teams = sPlayerbotAIConfig.randomBotArenaTeams;
+    teams.erase(std::remove(teams.begin(), teams.end(), teamId), teams.end());
+    sPlayerbotAIConfig.randomBotArenaTeamLevels.erase(teamId);
+}
+
+uint8 ResolveAllowedBracketLevel(uint8 level)
+{
+    return sWorld->IsArenaTeamAllowedLevel(level) ? level : 0;
+}
+
+uint8 InferArenaTeamBracketLevel(ArenaTeam* team, uint8 fallbackLevel = 0)
+{
+    if (!team)
+        return 0;
+
+    if (auto it = sPlayerbotAIConfig.randomBotArenaTeamLevels.find(team->GetId());
+        it != sPlayerbotAIConfig.randomBotArenaTeamLevels.end())
+        if (uint8 level = ResolveAllowedBracketLevel(it->second))
+            return level;
+
+    if (uint8 level = ResolveAllowedBracketLevel(fallbackLevel))
+        return level;
+
+    ObjectGuid captainGuid = team->GetCaptain();
+    if (Player* captain = ObjectAccessor::FindPlayer(captainGuid))
+        if (uint8 level = ResolveAllowedBracketLevel(captain->GetLevel()))
+            return level;
+
+    if (CharacterCacheEntry const* entry = sCharacterCache->GetCharacterCacheByGuid(captainGuid))
+        if (uint8 level = ResolveAllowedBracketLevel(entry->Level))
+            return level;
+
+    return 0;
+}
+
+uint32 CountConfiguredRandomBotArenaTeams(ArenaType type, uint8 forcedLevel)
+{
+    uint32 count = 0;
+    for (uint32 teamId : sPlayerbotAIConfig.randomBotArenaTeams)
+    {
+        ArenaTeam* team = sArenaTeamMgr->GetArenaTeamById(teamId);
+        if (!team || team->GetType() != type)
+            continue;
+
+        if (forcedLevel)
+        {
+            uint8 bracketLevel = InferArenaTeamBracketLevel(team);
+            if (bracketLevel != forcedLevel)
+                continue;
+        }
+
+        ++count;
+    }
+    return count;
+}
+
+bool RegisterExistingRandomBotArenaTeam(ArenaTeam* arenateam, uint8 forcedLevel)
+{
+    if (!arenateam)
+        return false;
+
+    uint8 bracketLevel = forcedLevel ? forcedLevel : InferArenaTeamBracketLevel(arenateam);
+    TrackRandomBotArenaTeam(arenateam->GetId(), bracketLevel);
+
+    uint32 rosterSize = arenateam->GetType();
+    if (arenateam->GetMembersSize() >= rosterSize)
+        return true;
+
+    if (PlayerbotFactory::FillRandomBotArenaTeam(arenateam))
+        return true;
+
+    LOG_WARN("playerbots", "Existing arena team #{} <{}> could not be filled ({}/{}); disbanding",
+             arenateam->GetId(), arenateam->GetName(), arenateam->GetMembersSize(), rosterSize);
+    UntrackRandomBotArenaTeam(arenateam->GetId());
+    arenateam->Disband();
+    return false;
+}
+} // namespace
 
 constexpr RandomPlayerbotFactory::NameRaceAndGender RandomPlayerbotFactory::CombineRaceAndGender(uint8 race,
                                                                                                 uint8 gender)
@@ -782,8 +898,343 @@ std::string const RandomPlayerbotFactory::CreateRandomGuildName()
     return guildName;
 }
 
-void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count)
+void RandomPlayerbotFactory::PrepareBotArenaLevel(Player* player, uint8 targetLevel)
 {
+    if (!player)
+        return;
+
+    if (player->GetLevel() != targetLevel)
+    {
+        player->GiveLevel(targetLevel);
+        player->SetUInt32Value(PLAYER_XP, 0);
+
+        PlayerbotFactory factory = PlayerbotFactory::CreateForRandomBot(player, targetLevel);
+        factory.Randomize(true, true);
+    }
+
+    sRandomPlayerbotMgr.SetValue(player, "level", targetLevel);
+}
+
+bool RandomPlayerbotFactory::IsRandomBotArenaLevel70FeaturesEnabled()
+{
+    return sPlayerbotAIConfig.randomBotArenaLevel70Features;
+}
+
+bool RandomPlayerbotFactory::ShouldLockRandomBotArenaLevel(uint8 bracket)
+{
+    return IsRandomBotArenaLevel70FeaturesEnabled() && bracket == 70;
+}
+
+bool RandomPlayerbotFactory::ShouldPinRandomBotArenaFillers(uint8 bracket)
+{
+    return bracket != 70 || IsRandomBotArenaLevel70FeaturesEnabled();
+}
+
+uint8 RandomPlayerbotFactory::GetRandomBotArenaTeamBracketLevel(ArenaTeam* team)
+{
+    if (!team)
+        return 0;
+
+    if (auto it = sPlayerbotAIConfig.randomBotArenaTeamLevels.find(team->GetId());
+        it != sPlayerbotAIConfig.randomBotArenaTeamLevels.end())
+        if (uint8 level = ResolveAllowedBracketLevel(it->second))
+            return level;
+
+    return InferArenaTeamBracketLevel(team);
+}
+
+uint8 RandomPlayerbotFactory::GetRandomBotArenaBracketLevel(Player* bot)
+{
+    if (!bot)
+        return 0;
+
+    ObjectGuid botGuid = bot->GetGUID();
+    for (uint32 teamId : sPlayerbotAIConfig.randomBotArenaTeams)
+    {
+        ArenaTeam* team = sArenaTeamMgr->GetArenaTeamById(teamId);
+        if (!team)
+            continue;
+
+        for (ArenaTeamMember const& member : team->GetMembers())
+        {
+            if (member.Guid != botGuid)
+                continue;
+
+            return GetRandomBotArenaTeamBracketLevel(team);
+        }
+    }
+
+    return 0;
+}
+
+void RandomPlayerbotFactory::ApplyRandomBotArenaLevelPolicy(Player* bot, uint8 bracket)
+{
+    if (!bot || !ShouldLockRandomBotArenaLevel(bracket))
+        return;
+
+    PrepareBotArenaLevel(bot, bracket);
+    bot->SetPlayerFlag(PLAYER_FLAGS_NO_XP_GAIN);
+}
+
+void RandomPlayerbotFactory::RefreshRandomBotArenaLevelPolicy(Player* bot)
+{
+    if (!bot || !sPlayerbotAIConfig.IsInRandomAccountList(bot->GetSession()->GetAccountId()))
+        return;
+
+    if (uint8 bracket = GetRandomBotArenaBracketLevel(bot))
+    {
+        if (ShouldLockRandomBotArenaLevel(bracket))
+        {
+            ApplyRandomBotArenaLevelPolicy(bot, bracket);
+            return;
+        }
+    }
+
+    if (!sPlayerbotAIConfig.randomBotFixedLevel)
+        bot->RemovePlayerFlag(PLAYER_FLAGS_NO_XP_GAIN);
+}
+
+void RandomPlayerbotFactory::RepinRandomBotArenaTeamForQueue(ArenaTeam* team)
+{
+    if (!team || !ShouldLockRandomBotArenaLevel(GetRandomBotArenaTeamBracketLevel(team)))
+        return;
+
+    uint8 bracket = 70;
+    if (Player* captain = ObjectAccessor::FindPlayer(team->GetCaptain()))
+        ApplyRandomBotArenaLevelPolicy(captain, bracket);
+
+    for (ArenaTeamMember const& member : team->GetMembers())
+    {
+        if (Player* memberPlayer = ObjectAccessor::FindPlayer(member.Guid))
+            ApplyRandomBotArenaLevelPolicy(memberPlayer, bracket);
+    }
+}
+
+void RandomPlayerbotFactory::RepinRandomBotArenaCaptains()
+{
+    for (uint32 teamId : sPlayerbotAIConfig.randomBotArenaTeams)
+    {
+        ArenaTeam* team = sArenaTeamMgr->GetArenaTeamById(teamId);
+        if (!team)
+            continue;
+
+        Player* captain = ObjectAccessor::FindPlayer(team->GetCaptain());
+        if (!captain)
+            continue;
+
+        uint8 targetLevel = InferArenaTeamBracketLevel(team);
+        if (!targetLevel)
+        {
+            for (ArenaTeamMember const& member : team->GetMembers())
+            {
+                if (Player* memberPlayer = ObjectAccessor::FindPlayer(member.Guid))
+                {
+                    if (uint8 level = ResolveAllowedBracketLevel(memberPlayer->GetLevel()))
+                    {
+                        targetLevel = level;
+                        break;
+                    }
+                }
+
+                if (CharacterCacheEntry const* entry = sCharacterCache->GetCharacterCacheByGuid(member.Guid))
+                {
+                    if (uint8 level = ResolveAllowedBracketLevel(entry->Level))
+                    {
+                        targetLevel = level;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!targetLevel || captain->GetLevel() == targetLevel)
+            continue;
+
+        PrepareBotArenaLevel(captain, targetLevel);
+        RefreshRandomBotArenaLevelPolicy(captain);
+    }
+}
+
+uint32 RandomPlayerbotFactory::ArenaTeamCreationKey(ArenaType type, uint8 forcedLevel)
+{
+    return (static_cast<uint32>(type) << 8) | forcedLevel;
+}
+
+bool RandomPlayerbotFactory::IsRandomBotArenaTeamCreationExhausted(ArenaType type, uint8 forcedLevel)
+{
+    return sPlayerbotAIConfig.randomBotArenaTeamCreationExhausted.count(ArenaTeamCreationKey(type, forcedLevel));
+}
+
+void RandomPlayerbotFactory::MarkRandomBotArenaTeamCreationExhausted(ArenaType type, uint8 forcedLevel, uint32 created,
+                                                                     uint32 target)
+{
+    uint32 const key = ArenaTeamCreationKey(type, forcedLevel);
+    if (sPlayerbotAIConfig.randomBotArenaTeamCreationExhausted.insert(key).second)
+    {
+        LOG_INFO("playerbots",
+                 "Arena {}v{} bracket level {} creation exhausted at {}/{} teams (will not retry this bracket)",
+                 type, type, forcedLevel ? forcedLevel : 0, created, target);
+    }
+}
+
+void RandomPlayerbotFactory::ClearRandomBotArenaTeamCreationExhausted()
+{
+    sPlayerbotAIConfig.randomBotArenaTeamCreationExhausted.clear();
+}
+
+bool RandomPlayerbotFactory::IsRandomBotArenaBracketSatisfied(ArenaType type, uint8 forcedLevel, uint32 targetCount)
+{
+    if (!targetCount)
+        return true;
+
+    if (CountConfiguredRandomBotArenaTeams(type, forcedLevel) >= targetCount)
+        return true;
+
+    return IsRandomBotArenaTeamCreationExhausted(type, forcedLevel);
+}
+
+uint32 RandomPlayerbotFactory::CountRandomBotArenaTeams(ArenaType type, uint8 forcedLevel)
+{
+    return CountConfiguredRandomBotArenaTeams(type, forcedLevel);
+}
+
+void RandomPlayerbotFactory::RemoveRandomBotArenaTeam(ArenaTeam* team)
+{
+    if (!team)
+        return;
+
+    UntrackRandomBotArenaTeam(team->GetId());
+    team->Disband();
+}
+
+uint32 RandomPlayerbotFactory::GetRandomBotArenaTeamTargetCount(ArenaType type, uint8 forcedLevel)
+{
+    switch (type)
+    {
+        case ARENA_TYPE_2v2:
+            return sPlayerbotAIConfig.randomBotArenaTeam2v2Count;
+        case ARENA_TYPE_3v3:
+            return sPlayerbotAIConfig.randomBotArenaTeam3v3Count;
+        case ARENA_TYPE_5v5:
+            if (sPlayerbotAIConfig.randomBotArenaTeam5v5Count70 ||
+                sPlayerbotAIConfig.randomBotArenaTeam5v5Count80)
+            {
+                if (forcedLevel == 70)
+                    return sPlayerbotAIConfig.randomBotArenaTeam5v5Count70;
+                if (forcedLevel == 80)
+                    return sPlayerbotAIConfig.randomBotArenaTeam5v5Count80;
+            }
+            return sPlayerbotAIConfig.randomBotArenaTeam5v5Count;
+        default:
+            return 0;
+    }
+}
+
+bool RandomPlayerbotFactory::CanCreateRandomBotArenaTeams()
+{
+    if (!sPlayerbotAIConfig.randomBotJoinBG)
+        return false;
+
+    return sRandomPlayerbotMgr.GetAllBots().size() >= sRandomPlayerbotMgr.GetMaxAllowedBotCount();
+}
+
+bool RandomPlayerbotFactory::HasRequiredRandomBotArenaTeams()
+{
+    if (!IsRandomBotArenaBracketSatisfied(ARENA_TYPE_2v2, 0, sPlayerbotAIConfig.randomBotArenaTeam2v2Count))
+        return false;
+
+    if (!IsRandomBotArenaBracketSatisfied(ARENA_TYPE_3v3, 0, sPlayerbotAIConfig.randomBotArenaTeam3v3Count))
+        return false;
+
+    if (sPlayerbotAIConfig.randomBotArenaTeam5v5Count70 ||
+        sPlayerbotAIConfig.randomBotArenaTeam5v5Count80)
+    {
+        if (!IsRandomBotArenaBracketSatisfied(ARENA_TYPE_5v5, 70,
+                                              sPlayerbotAIConfig.randomBotArenaTeam5v5Count70))
+            return false;
+
+        if (!IsRandomBotArenaBracketSatisfied(ARENA_TYPE_5v5, 80,
+                                              sPlayerbotAIConfig.randomBotArenaTeam5v5Count80))
+            return false;
+
+        return true;
+    }
+
+    if (!IsRandomBotArenaBracketSatisfied(ARENA_TYPE_5v5, 0, sPlayerbotAIConfig.randomBotArenaTeam5v5Count))
+        return false;
+
+    return true;
+}
+
+void RandomPlayerbotFactory::EnsureRandomArenaTeams()
+{
+    if (!CanCreateRandomBotArenaTeams())
+        return;
+
+    if (HasRequiredRandomBotArenaTeams())
+        return;
+
+    if (sPlayerbotAIConfig.deleteRandomBotArenaTeams)
+    {
+        LOG_INFO("playerbots", "Deleting random bot arena teams...");
+
+        std::vector<uint32> teamsToDisband;
+        for (auto it = sArenaTeamMgr->GetArenaTeams().begin(); it != sArenaTeamMgr->GetArenaTeams().end(); ++it)
+        {
+            ArenaTeam* arenateam = it->second;
+            ObjectGuid captainGuid = arenateam->GetCaptain();
+            if (!captainGuid.IsPlayer())
+                continue;
+
+            uint32 accountId = sCharacterCache->GetCharacterAccountIdByGuid(captainGuid);
+            if (!accountId || !sPlayerbotAIConfig.IsInRandomAccountList(accountId))
+                continue;
+
+            teamsToDisband.push_back(arenateam->GetId());
+        }
+
+        for (uint32 teamId : teamsToDisband)
+        {
+            if (ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamById(teamId))
+                arenateam->Disband(nullptr);
+        }
+
+        sPlayerbotAIConfig.randomBotArenaTeamLevels.clear();
+        ClearRandomBotArenaTeamCreationExhausted();
+
+        LOG_INFO("playerbots", "Random bot arena teams deleted ({})", teamsToDisband.size());
+    }
+
+    CreateRandomArenaTeams(ARENA_TYPE_2v2, sPlayerbotAIConfig.randomBotArenaTeam2v2Count);
+    CreateRandomArenaTeams(ARENA_TYPE_3v3, sPlayerbotAIConfig.randomBotArenaTeam3v3Count);
+
+    if (sPlayerbotAIConfig.randomBotArenaTeam5v5Count70 || sPlayerbotAIConfig.randomBotArenaTeam5v5Count80)
+    {
+        if (sPlayerbotAIConfig.randomBotArenaTeam5v5Count70)
+            CreateRandomArenaTeams(ARENA_TYPE_5v5, sPlayerbotAIConfig.randomBotArenaTeam5v5Count70, 70);
+        if (sPlayerbotAIConfig.randomBotArenaTeam5v5Count80)
+            CreateRandomArenaTeams(ARENA_TYPE_5v5, sPlayerbotAIConfig.randomBotArenaTeam5v5Count80, 80);
+    }
+    else
+        CreateRandomArenaTeams(ARENA_TYPE_5v5, sPlayerbotAIConfig.randomBotArenaTeam5v5Count);
+
+    if (sPlayerbotAIConfig.randomBotArenaTeams.empty())
+        LOG_ERROR("playerbots", "Failed to create random bot arena teams");
+    else
+        LOG_INFO("playerbots", "Created {} random bot arena teams", sPlayerbotAIConfig.randomBotArenaTeams.size());
+}
+
+void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count, uint8 forcedLevel)
+{
+    if (!count)
+        return;
+
+    if (IsRandomBotArenaTeamCreationExhausted(type, forcedLevel))
+        return;
+
+    if (CountConfiguredRandomBotArenaTeams(type, forcedLevel) >= count)
+        return;
+
     std::vector<uint32> randomBots;
 
     PlayerbotsDatabasePreparedStatement* stmt = PlayerbotsDatabase.GetPreparedStatement(PLAYERBOTS_SEL_RANDOM_BOTS_BOT);
@@ -798,69 +1249,175 @@ void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count
         } while (result->NextRow());
     }
 
-    uint32 arenaTeamNumber = 0;
     GuidVector availableCaptains;
+    std::vector<uint8> allowedLevels = sWorld->GetArenaTeamAllowedLevels();
+    uint32 const rosterSize = type;
     for (std::vector<uint32>::iterator i = randomBots.begin(); i != randomBots.end(); ++i)
     {
         ObjectGuid captain = ObjectGuid::Create<HighGuid::Player>(*i);
         ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamByCaptain(captain, type);
         if (arenateam)
         {
-            ++arenaTeamNumber;
-            sPlayerbotAIConfig.randomBotArenaTeams.push_back(arenateam->GetId());
+            uint8 bracketLevel = InferArenaTeamBracketLevel(arenateam);
+            if (forcedLevel && bracketLevel != forcedLevel)
+                continue;
+
+            RegisterExistingRandomBotArenaTeam(arenateam, forcedLevel);
         }
         else
         {
             Player* player = ObjectAccessor::FindConnectedPlayer(captain);
 
-            if (!arenateam && player && player->GetLevel() >= 70)
+            if (player && (!forcedLevel || PlayerbotFactory::IsRandomBotEligibleForArenaFill(player, forcedLevel)))
                 availableCaptains.push_back(captain);
         }
     }
 
-    for (; arenaTeamNumber < count; ++arenaTeamNumber)
+    uint32 arenaTeamNumber = CountConfiguredRandomBotArenaTeams(type, forcedLevel);
+
+    for (; arenaTeamNumber < count;)
     {
         std::string const arenaTeamName = CreateRandomArenaTeamName();
         if (arenaTeamName.empty())
-            continue;
+        {
+            LOG_ERROR("playerbots", "No arena team name available for level {} teams", forcedLevel);
+            MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+            break;
+        }
 
         if (availableCaptains.empty())
         {
-            LOG_ERROR("playerbots", "No captains for random arena teams available");
-            continue;
+            LOG_ERROR("playerbots", "No eligible captains for random arena teams available (level {})", forcedLevel);
+            MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+            break;
         }
 
-        uint32 index = urand(0, availableCaptains.size() - 1);
-        ObjectGuid captain = availableCaptains[index];
+        uint8 targetLevel = forcedLevel;
+        if (!targetLevel)
+        {
+            if (allowedLevels.empty())
+            {
+                LOG_ERROR("playerbots", "No arena team allowed levels configured");
+                MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+                break;
+            }
+            targetLevel = allowedLevels[arenaTeamNumber % allowedLevels.size()];
+        }
+        else if (!sWorld->IsArenaTeamAllowedLevel(targetLevel))
+        {
+            LOG_ERROR("playerbots", "Level {} is not allowed for arena team creation", targetLevel);
+            MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+            break;
+        }
+
+        uint32 allianceEligible =
+            PlayerbotFactory::CountEligibleRandomBotArenaFillersIncludingOffline(TEAM_ALLIANCE, targetLevel);
+        uint32 hordeEligible =
+            PlayerbotFactory::CountEligibleRandomBotArenaFillersIncludingOffline(TEAM_HORDE, targetLevel);
+
+        availableCaptains.erase(
+            std::remove_if(availableCaptains.begin(), availableCaptains.end(),
+                           [targetLevel](ObjectGuid const& guid)
+                           {
+                               Player* candidate = ObjectAccessor::FindConnectedPlayer(guid);
+                               return !candidate ||
+                                      !PlayerbotFactory::IsRandomBotEligibleForArenaFill(candidate, targetLevel);
+                           }),
+            availableCaptains.end());
+
+        if (availableCaptains.empty())
+        {
+            uint32 allianceEligible =
+                PlayerbotFactory::CountEligibleRandomBotArenaFillersIncludingOffline(TEAM_ALLIANCE, targetLevel);
+            uint32 hordeEligible =
+                PlayerbotFactory::CountEligibleRandomBotArenaFillersIncludingOffline(TEAM_HORDE, targetLevel);
+            LOG_WARN("playerbots",
+                     "Stopping {}v{} arena team creation at level {}: no eligible captain candidates left "
+                     "(alliance: {}, horde: {} free incl. offline for roster)",
+                     rosterSize, rosterSize, targetLevel, allianceEligible, hordeEligible);
+            MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+            break;
+        }
+
+        GuidVector preferredCaptains;
+        GuidVector fallbackCaptains;
+        GuidVector eligibleCaptainCandidates;
+        for (ObjectGuid const& guid : availableCaptains)
+        {
+            Player* candidate = ObjectAccessor::FindConnectedPlayer(guid);
+            if (!candidate)
+                continue;
+
+            eligibleCaptainCandidates.push_back(guid);
+
+            if (candidate->GetLevel() == targetLevel)
+                preferredCaptains.push_back(guid);
+            else
+                fallbackCaptains.push_back(guid);
+        }
+
+        GuidVector const& captainPool = RandomPlayerbotFactory::ShouldPinRandomBotArenaFillers(targetLevel)
+            ? eligibleCaptainCandidates
+            : (!preferredCaptains.empty() ? preferredCaptains : fallbackCaptains);
+        GuidVector staffableCaptains;
+        for (ObjectGuid const& guid : captainPool)
+        {
+            Player* candidate = ObjectAccessor::FindConnectedPlayer(guid);
+            if (!candidate)
+                continue;
+
+            if (!PlayerbotFactory::IsRandomBotEligibleForArenaFill(candidate, targetLevel))
+                continue;
+
+            TeamId faction = candidate->GetTeamId();
+            uint32 factionEligible = faction == TEAM_ALLIANCE ? allianceEligible : hordeEligible;
+            if (factionEligible < rosterSize)
+                continue;
+
+            staffableCaptains.push_back(guid);
+        }
+
+        if (staffableCaptains.empty())
+        {
+            LOG_WARN("playerbots",
+                     "Stopping {}v{} arena team creation at level {}: fewer than {} free same-faction bots "
+                     "(alliance: {}, horde: {} eligible incl. offline; {} eligible captain candidates)",
+                     rosterSize, rosterSize, targetLevel, rosterSize, allianceEligible, hordeEligible,
+                     eligibleCaptainCandidates.size());
+            MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+            break;
+        }
+
+        uint32 index = urand(0, staffableCaptains.size() - 1);
+        ObjectGuid captain = staffableCaptains[index];
         Player* player = ObjectAccessor::FindConnectedPlayer(captain);
         if (!player)
         {
             LOG_ERROR("playerbots", "Cannot find player for captain {}", captain.ToString().c_str());
+            availableCaptains.erase(std::remove(availableCaptains.begin(), availableCaptains.end(), captain),
+                                    availableCaptains.end());
             continue;
         }
 
-        if (player->GetLevel() < 70)
+        PrepareBotArenaLevel(player, targetLevel);
+
+        if (player->GetLevel() != targetLevel)
         {
-            LOG_ERROR("playerbots", "Bot {} must be level 70 to create an arena team", captain.ToString().c_str());
+            LOG_ERROR("playerbots", "Bot {} failed to reach level {} for arena team creation",
+                      captain.ToString().c_str(), targetLevel);
+            availableCaptains.erase(std::remove(availableCaptains.begin(), availableCaptains.end(), captain),
+                                    availableCaptains.end());
             continue;
         }
 
-        // Below query no longer required as now user has control over the number of each type of arena team they want
-        // to create. Keeping commented for potential future reference. QueryResult results =
-        // CharacterDatabase.Query("SELECT `type` FROM playerbots_arena_team_names WHERE name = '{}'",
-        // arenaTeamName.c_str()); if (!results)
-        // {
-        //     LOG_ERROR("playerbots", "No valid types for arena teams");
-        //     return;
-        // }
-
-        // Field* fields = results->Fetch();
-        // uint8 slot = fields[0].Get<uint8>();
+        RefreshRandomBotArenaLevelPolicy(player);
 
         ArenaTeam* arenateam = new ArenaTeam();
         if (!arenateam->Create(player->GetGUID(), type, arenaTeamName, 0, 0, 0, 0, 0))
         {
             LOG_ERROR("playerbots", "Error creating arena team {}", arenaTeamName.c_str());
+            availableCaptains.erase(std::remove(availableCaptains.begin(), availableCaptains.end(), captain),
+                                    availableCaptains.end());
             continue;
         }
 
@@ -878,16 +1435,29 @@ void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count
         uint32 borderColor = urand(0xFF000000, 0xFFFFFFFF);
         arenateam->SetEmblem(backgroundColor, emblemStyle, emblemColor, borderStyle, borderColor);
 
-        // set random kills (wip)
-        // arenateam->SetStats(STAT_TYPE_GAMES_WEEK, urand(0, 30));
-        // arenateam->SetStats(STAT_TYPE_WINS_WEEK, urand(0, arenateam->GetStats().games_week));
-        // arenateam->SetStats(STAT_TYPE_GAMES_SEASON, urand(arenateam->GetStats().games_week,
-        // arenateam->GetStats().games_week * 5)); arenateam->SetStats(STAT_TYPE_WINS_SEASON,
-        // urand(arenateam->GetStats().wins_week, arenateam->GetStats().games
         arenateam->SaveToDB();
 
         sArenaTeamMgr->AddArenaTeam(arenateam);
-        sPlayerbotAIConfig.randomBotArenaTeams.push_back(arenateam->GetId());
+        TrackRandomBotArenaTeam(arenateam->GetId(), targetLevel);
+        availableCaptains.erase(std::remove(availableCaptains.begin(), availableCaptains.end(), captain),
+                                availableCaptains.end());
+
+        if (!PlayerbotFactory::FillRandomBotArenaTeam(arenateam))
+        {
+            LOG_WARN("playerbots",
+                     "Could not fill arena team #{} <{}> (level {}); stopping {}v{} creation ({}/{} members)",
+                     arenateam->GetId(), arenaTeamName, targetLevel, rosterSize, rosterSize,
+                     arenateam->GetMembersSize(), rosterSize);
+            UntrackRandomBotArenaTeam(arenateam->GetId());
+            arenateam->Disband();
+            delete arenateam;
+            MarkRandomBotArenaTeamCreationExhausted(type, forcedLevel, arenaTeamNumber, count);
+            break;
+        }
+
+        ++arenaTeamNumber;
+        LOG_INFO("playerbots", "Created and filled random bot arena team #{} <{}> (level {}, {}/{} members)",
+                 arenateam->GetId(), arenaTeamName, targetLevel, arenateam->GetMembersSize(), rosterSize);
     }
 
     LOG_DEBUG("playerbots", "{} random bot {}vs{} arena teams available", arenaTeamNumber, type, type);
