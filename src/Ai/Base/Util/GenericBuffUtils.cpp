@@ -5,6 +5,7 @@
 
 #include "GenericBuffUtils.h"
 #include "PlayerbotAIConfig.h"
+#include "Playerbots.h"
 
 #include <map>
 
@@ -30,12 +31,87 @@ namespace ai::buff
         if (name == "blessing of sanctuary")    return "blessing of sanctuary,greater blessing of sanctuary";
         // Druid
         if (name == "mark of the wild")         return "mark of the wild,gift of the wild";
+        if (name == "gift of the wild")         return "mark of the wild,gift of the wild";
         // Mage
         if (name == "arcane intellect")         return "arcane intellect,arcane brilliance";
+        if (name == "arcane brilliance")        return "arcane intellect,arcane brilliance";
         // Priest
         if (name == "power word: fortitude")    return "power word: fortitude,prayer of fortitude";
+        if (name == "prayer of fortitude")      return "power word: fortitude,prayer of fortitude";
+        // Spirit
+        if (name == "divine spirit")            return "divine spirit,prayer of spirit";
+        if (name == "prayer of spirit")         return "divine spirit,prayer of spirit";
 
         return name;
+    }
+
+    std::string SingleVariantFor(std::string const& groupName)
+    {
+        if (groupName == "prayer of fortitude") return "power word: fortitude";
+        if (groupName == "gift of the wild")    return "mark of the wild";
+        if (groupName == "prayer of spirit")    return "divine spirit";
+        if (groupName == "arcane brilliance")   return "arcane intellect";
+        return std::string();
+    }
+
+    static bool GroupBuffAllowsSingleUpgrade(std::string const& singleBase)
+    {
+        return singleBase != "power word: fortitude";
+    }
+
+    bool NeedsGroupBuff(PlayerbotAI* botAI, Unit* unit, std::string const& singleBase)
+    {
+        if (!unit || !unit->IsAlive())
+            return false;
+
+        std::string const qual = MakeAuraQualifierForBuff(singleBase);
+        std::vector<std::string> parts = split(qual, ',');
+        if (parts.empty())
+            return true;
+
+        if (parts.size() > 1 && botAI->HasAura(parts[1], unit))
+            return false;
+
+        if (!GroupBuffAllowsSingleUpgrade(singleBase))
+        {
+            for (std::string const& part : parts)
+            {
+                if (botAI->HasAura(part, unit))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool NeedsPaladinBlessing(PlayerbotAI* botAI, Unit* unit, std::string const& blessingBase)
+    {
+        if (!unit || !unit->IsAlive())
+            return false;
+
+        std::string const desiredQual = MakeAuraQualifierForBuff(blessingBase);
+        std::vector<std::string> desiredAuras = split(desiredQual, ',');
+
+        if (desiredAuras.size() > 1 && botAI->HasAura(desiredAuras[1], unit))
+            return false;
+
+        for (std::string const& other : split(std::string(AllPaladinBlessingAuras), ','))
+        {
+            bool isDesired = false;
+            for (std::string const& desired : desiredAuras)
+            {
+                if (desired == other)
+                {
+                    isDesired = true;
+                    break;
+                }
+            }
+
+            if (!isDesired && botAI->HasAura(other, unit))
+                return false;
+        }
+
+        return true;
     }
 
     std::string GroupVariantFor(std::string const& name)

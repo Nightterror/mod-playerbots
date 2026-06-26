@@ -4,7 +4,10 @@
  */
 
 #include "PartyMemberWithoutAuraValue.h"
+#include "PartyMemberNeedingGroupBuffValue.h"
+#include "PartyMemberNeedingPaladinBlessingValue.h"
 
+#include "GenericBuffUtils.h"
 #include "Playerbots.h"
 
 extern std::vector<std::string> split(std::string const s, char delim);
@@ -39,5 +42,51 @@ private:
 Unit* PartyMemberWithoutAuraValue::Calculate()
 {
     PlayerWithoutAuraPredicate predicate(botAI, qualifier);
+    return FindPartyMember(predicate);
+}
+
+class PartyMemberNeedingPaladinBlessingPredicate : public FindPlayerPredicate, public PlayerbotAIAware
+{
+public:
+    PartyMemberNeedingPaladinBlessingPredicate(PlayerbotAI* botAI, std::string const blessingBase)
+        : PlayerbotAIAware(botAI), FindPlayerPredicate(), blessingBase(blessingBase)
+    {
+    }
+
+    bool Check(Unit* unit) override
+    {
+        return ai::buff::NeedsPaladinBlessing(botAI, unit, blessingBase);
+    }
+
+private:
+    std::string blessingBase;
+};
+
+Unit* PartyMemberNeedingPaladinBlessingValue::Calculate()
+{
+    PartyMemberNeedingPaladinBlessingPredicate predicate(botAI, qualifier);
+    return FindPartyMember(predicate);
+}
+
+class PartyMemberNeedingGroupBuffPredicate : public FindPlayerPredicate, public PlayerbotAIAware
+{
+public:
+    PartyMemberNeedingGroupBuffPredicate(PlayerbotAI* botAI, std::string const singleBase)
+        : PlayerbotAIAware(botAI), FindPlayerPredicate(), singleBase(singleBase)
+    {
+    }
+
+    bool Check(Unit* unit) override
+    {
+        return ai::buff::NeedsGroupBuff(botAI, unit, singleBase);
+    }
+
+private:
+    std::string singleBase;
+};
+
+Unit* PartyMemberNeedingGroupBuffValue::Calculate()
+{
+    PartyMemberNeedingGroupBuffPredicate predicate(botAI, qualifier);
     return FindPartyMember(predicate);
 }

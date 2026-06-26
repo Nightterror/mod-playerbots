@@ -10,6 +10,36 @@
 #include "Playerbots.h"
 #include "PaladinHelper.h"
 
+Value<Unit*>* BlessingOnPartyTrigger::GetTargetValue()
+{
+    return context->GetValue<Unit*>(
+        "party member needing paladin blessing", "blessing of kings");
+}
+
+Value<Unit*>* BlessingOfKingsOnPartyTrigger::GetTargetValue()
+{
+    return context->GetValue<Unit*>(
+        "party member needing paladin blessing", "blessing of kings");
+}
+
+Value<Unit*>* BlessingOfWisdomOnPartyTrigger::GetTargetValue()
+{
+    return context->GetValue<Unit*>(
+        "party member needing paladin blessing", "blessing of wisdom");
+}
+
+Value<Unit*>* BlessingOfMightOnPartyTrigger::GetTargetValue()
+{
+    return context->GetValue<Unit*>(
+        "party member needing paladin blessing", "blessing of might");
+}
+
+Value<Unit*>* BlessingOfSanctuaryOnPartyTrigger::GetTargetValue()
+{
+    return context->GetValue<Unit*>(
+        "party member needing paladin blessing", "blessing of sanctuary");
+}
+
 bool SealTrigger::IsActive()
 {
     Unit* target = GetTarget();
@@ -28,8 +58,11 @@ bool CrusaderAuraTrigger::IsActive()
 bool BlessingTrigger::IsActive()
 {
     Unit* target = GetTarget();
-    return SpellTrigger::IsActive() && !botAI->HasAnyAuraOf(target, "blessing of might", "blessing of wisdom",
-                                                            "blessing of kings", "blessing of sanctuary", nullptr);
+    return SpellTrigger::IsActive() && !botAI->HasAnyAuraOf(target, "blessing of might", "greater blessing of might",
+                                                            "blessing of wisdom", "greater blessing of wisdom",
+                                                            "blessing of kings", "greater blessing of kings",
+                                                            "blessing of sanctuary", "greater blessing of sanctuary",
+                                                            nullptr);
 }
 
 bool DivineShieldLowHealthTrigger::IsActive()

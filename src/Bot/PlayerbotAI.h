@@ -473,6 +473,8 @@ public:
     void SpellInterrupted(uint32 spellid);
     int32 CalculateGlobalCooldown(uint32 spellid);
     void InterruptSpell();
+    void BeginAwaitingRegen();
+    void InterruptRegen();
     void RequestSpellInterrupt();
     void RemoveAura(std::string const name);
     void RemoveShapeshift();
@@ -651,6 +653,9 @@ protected:
     Position jumpDestination = Position();
     uint32 nextTransportCheck = 0;
     bool spellInterruptRequested = false;
+    bool awaitingRegen = false;
+
+    bool ShouldInterruptRegen();
 };
 
 #endif

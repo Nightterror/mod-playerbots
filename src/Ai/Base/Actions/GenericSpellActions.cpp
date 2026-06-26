@@ -252,7 +252,14 @@ Value<Unit*>* CurePartyMemberAction::GetTargetValue()
 // TODO Priest doen't verify il he have components
 Value<Unit*>* BuffOnPartyAction::GetTargetValue()
 {
-    return context->GetValue<Unit*>("party member without aura", MakeAuraQualifierForBuff(spell));
+    if (std::string const single = ai::buff::SingleVariantFor(spell); !single.empty())
+    {
+        return context->GetValue<Unit*>(
+            "party member needing group buff", single);
+    }
+
+    return context->GetValue<Unit*>(
+        "party member without aura", ai::buff::MakeAuraQualifierForBuff(spell));
 }
 
 bool BuffOnPartyAction::Execute(Event /*event*/)

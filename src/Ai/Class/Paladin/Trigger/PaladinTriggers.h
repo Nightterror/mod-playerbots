@@ -78,6 +78,8 @@ class BlessingOnPartyTrigger : public BuffOnPartyTrigger
 public:
     BlessingOnPartyTrigger(PlayerbotAI* botAI)
         : BuffOnPartyTrigger(botAI, "blessing of kings,blessing of might,blessing of wisdom", 2 * 2000) {}
+
+    Value<Unit*>* GetTargetValue() override;
 };
 
 class BlessingTrigger : public BuffTrigger
@@ -227,6 +229,8 @@ class BlessingOfKingsOnPartyTrigger : public BuffOnPartyTrigger
 public:
     BlessingOfKingsOnPartyTrigger(PlayerbotAI* botAI)
         : BuffOnPartyTrigger(botAI, "blessing of kings", 2 * 2000) {}
+
+    Value<Unit*>* GetTargetValue() override;
 };
 
 class BlessingOfWisdomOnPartyTrigger : public BuffOnPartyTrigger
@@ -234,6 +238,8 @@ class BlessingOfWisdomOnPartyTrigger : public BuffOnPartyTrigger
 public:
     BlessingOfWisdomOnPartyTrigger(PlayerbotAI* botAI)
         : BuffOnPartyTrigger(botAI, "blessing of might,blessing of wisdom", 2 * 2000) {}
+
+    Value<Unit*>* GetTargetValue() override;
 };
 
 class BlessingOfMightOnPartyTrigger : public BuffOnPartyTrigger
@@ -241,6 +247,8 @@ class BlessingOfMightOnPartyTrigger : public BuffOnPartyTrigger
 public:
     BlessingOfMightOnPartyTrigger(PlayerbotAI* botAI)
         : BuffOnPartyTrigger(botAI, "blessing of might,blessing of wisdom", 2 * 2000) {}
+
+    Value<Unit*>* GetTargetValue() override;
 };
 
 class BlessingOfSanctuaryOnPartyTrigger : public BuffOnPartyTrigger
@@ -248,6 +256,8 @@ class BlessingOfSanctuaryOnPartyTrigger : public BuffOnPartyTrigger
 public:
     BlessingOfSanctuaryOnPartyTrigger(PlayerbotAI* botAI)
         : BuffOnPartyTrigger(botAI, "blessing of sanctuary", 2 * 2000) {}
+
+    Value<Unit*>* GetTargetValue() override;
 };
 
 class HandOfFreedomOnPartyTrigger : public Trigger

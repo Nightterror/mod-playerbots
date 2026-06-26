@@ -18,8 +18,28 @@ class PlayerbotAI;
 namespace ai::buff
 {
 
+// All paladin blessings share one exclusive slot (spell group 1010).
+inline char const* AllPaladinBlessingAuras =
+    "blessing of might,greater blessing of might,"
+    "blessing of wisdom,greater blessing of wisdom,"
+    "blessing of kings,greater blessing of kings,"
+    "blessing of sanctuary,greater blessing of sanctuary";
+
 // Build an aura qualifier "single + greater" to avoid double-buffing
 std::string MakeAuraQualifierForBuff(std::string const& name);
+
+// Maps a group/raid buff name to its single-target counterpart.
+std::string SingleVariantFor(std::string const& groupName);
+
+// True when a unit should receive a group buff cast (Prayer of Fortitude, Gift of
+// the Wild, etc.). Individual buffs block fortitude group casts; other lines allow
+// upgrading single -> group.
+bool NeedsGroupBuff(PlayerbotAI* botAI, Unit* unit, std::string const& singleBase);
+
+// True when unit lacks the desired paladin blessing and is not blocked by a
+// different blessing type (greater variant of the desired blessing counts as
+// satisfied).
+bool NeedsPaladinBlessing(PlayerbotAI* botAI, Unit* unit, std::string const& blessingBase);
 
 // Returns the group spell name for a given single-target buff.
 // If no group equivalent exists, returns "".

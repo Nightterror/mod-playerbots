@@ -40,6 +40,7 @@ bool DrinkAction::Execute(Event event)
         botAI->SetNextCheckDelay(delay);
 
         bot->AddAura(25990, bot);
+        botAI->BeginAwaitingRegen();
         return true;
         // return botAI->CastSpell(24707, bot);
     }
@@ -94,6 +95,7 @@ bool EatAction::Execute(Event event)
         botAI->SetNextCheckDelay(delay);
 
         bot->AddAura(25990, bot);
+        botAI->BeginAwaitingRegen();
         return true;
     }
 

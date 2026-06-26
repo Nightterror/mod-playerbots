@@ -8,6 +8,7 @@
 #include <string>
 
 #include "CreatureAI.h"
+#include "GenericBuffUtils.h"
 #include "ItemVisitors.h"
 #include "LastSpellCastValue.h"
 #include "ObjectGuid.h"
@@ -176,7 +177,8 @@ bool BuffTrigger::IsActive()
 
 Value<Unit*>* BuffOnPartyTrigger::GetTargetValue()
 {
-    return context->GetValue<Unit*>("party member without aura", spell);
+    return context->GetValue<Unit*>(
+        "party member without aura", ai::buff::MakeAuraQualifierForBuff(spell));
 }
 
 bool ProtectPartyMemberTrigger::IsActive() { return AI_VALUE(Unit*, "party member to protect"); }

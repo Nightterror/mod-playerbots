@@ -83,6 +83,7 @@ class PrayerOfFortitudeTrigger : public BuffOnPartyTrigger
 public:
     PrayerOfFortitudeTrigger(PlayerbotAI* botAI) : BuffOnPartyTrigger(botAI, "prayer of fortitude", 3 * 2000) {}
 
+    Value<Unit*>* GetTargetValue() override;
     bool IsActive() override;
 };
 
@@ -91,6 +92,7 @@ class PrayerOfSpiritTrigger : public BuffOnPartyTrigger
 public:
     PrayerOfSpiritTrigger(PlayerbotAI* botAI) : BuffOnPartyTrigger(botAI, "prayer of spirit", 2 * 2000) {}
 
+    Value<Unit*>* GetTargetValue() override;
     bool IsActive() override;
 };
 

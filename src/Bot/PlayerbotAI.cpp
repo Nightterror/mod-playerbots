@@ -245,6 +245,9 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     else
         nextAICheckDelay = 0;
 
+    if (awaitingRegen && nextAICheckDelay == 0)
+        awaitingRegen = false;
+
     // Early return if bot is in invalid state
     if (!bot || !bot->GetSession() || !bot->IsInWorld() || bot->IsBeingTeleported() ||
         bot->GetSession()->isLogingOut() || bot->IsDuringRemoveFromWorld())
@@ -265,6 +268,9 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     }
 
     AllowActivity();
+
+    if (awaitingRegen && ShouldInterruptRegen())
+        InterruptRegen();
 
     if (!CanUpdateAI())
         return;
@@ -867,6 +873,7 @@ void PlayerbotAI::Reset(bool full)
     currentEngine = engines[BOT_STATE_NON_COMBAT];
     currentState = BOT_STATE_NON_COMBAT;
     nextAICheckDelay = 0;
+    awaitingRegen = false;
     whispers.clear();
 
     aiObjectContext->GetValue<Unit*>("old target")->Set(nullptr);
@@ -4248,6 +4255,52 @@ void PlayerbotAI::WaitForSpellCast(Spell* spell)
     SetNextCheckDelay(castTime + sPlayerbotAIConfig.reactDelay);
 }
 
+void PlayerbotAI::BeginAwaitingRegen()
+{
+    awaitingRegen = true;
+}
+
+bool PlayerbotAI::ShouldInterruptRegen()
+{
+    if (bot->IsInCombat())
+        return true;
+
+    if (!HasRealPlayerMaster())
+        return false;
+
+    Player* masterPlayer = GetMaster();
+    if (!masterPlayer || !masterPlayer->IsInWorld() || !masterPlayer->IsInCombat())
+        return false;
+
+    Unit* target = GetUnit(masterPlayer->GetTarget());
+    if (!target || !target->IsHostileTo(bot))
+        return false;
+
+    float const maxRange = sPlayerbotAIConfig.reactDistance;
+    if (bot->GetDistance(masterPlayer) <= maxRange)
+        return true;
+
+    if (target->IsInWorld() && bot->GetMapId() == target->GetMapId() &&
+        bot->GetDistance(target) <= maxRange)
+        return true;
+
+    return false;
+}
+
+void PlayerbotAI::InterruptRegen()
+{
+    awaitingRegen = false;
+    nextAICheckDelay = 0;
+
+    if (bot->getStandState() == UNIT_STAND_STATE_SIT)
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+
+    InterruptSpell();
+
+    if (HasAura(25990, bot))
+        bot->RemoveAurasDueToSpell(25990);
+}
+
 void PlayerbotAI::InterruptSpell()
 {
     for (uint8 type = CURRENT_MELEE_SPELL; type <= CURRENT_CHANNELED_SPELL; type++)
@@ -5998,7 +6051,7 @@ uint32 PlayerbotAI::GetBuffedCount(Player* player, std::string const spellname)
             if (!member->IsInSameRaidWith(player))
                 continue;
 
-            if (HasAura(spellname, member, true))
+            if (HasAura(spellname, member, false))
                 bcount++;
         }
     }

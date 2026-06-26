@@ -67,6 +67,8 @@
 #include "PartyMemberToHeal.h"
 #include "PartyMemberToResurrect.h"
 #include "PartyMemberSnaredTargetValue.h"
+#include "PartyMemberNeedingGroupBuffValue.h"
+#include "PartyMemberNeedingPaladinBlessingValue.h"
 #include "PartyMemberWithoutAuraValue.h"
 #include "PartyMemberWithoutItemValue.h"
 #include "PetTargetValue.h"
@@ -129,6 +131,9 @@ public:
         creators["nearest corpses"] = &ValueContext::nearest_corpses;
         creators["log level"] = &ValueContext::log_level;
         creators["party member without aura"] = &ValueContext::party_member_without_aura;
+        creators["party member needing paladin blessing"] =
+            &ValueContext::party_member_needing_paladin_blessing;
+        creators["party member needing group buff"] = &ValueContext::party_member_needing_group_buff;
         creators["attacker without aura"] = &ValueContext::attacker_without_aura;
         creators["melee attacker without aura"] = &ValueContext::melee_attacker_without_aura;
         creators["party member to heal"] = &ValueContext::party_member_to_heal;
@@ -445,6 +450,14 @@ private:
     static UntypedValue* party_member_without_aura(PlayerbotAI* botAI)
     {
         return new PartyMemberWithoutAuraValue(botAI);
+    }
+    static UntypedValue* party_member_needing_paladin_blessing(PlayerbotAI* botAI)
+    {
+        return new PartyMemberNeedingPaladinBlessingValue(botAI);
+    }
+    static UntypedValue* party_member_needing_group_buff(PlayerbotAI* botAI)
+    {
+        return new PartyMemberNeedingGroupBuffValue(botAI);
     }
     static UntypedValue* attacker_without_aura(PlayerbotAI* botAI) { return new AttackerWithoutAuraTargetValue(botAI); }
     static UntypedValue* melee_attacker_without_aura(PlayerbotAI* botAI)
